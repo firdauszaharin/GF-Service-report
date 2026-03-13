@@ -18,7 +18,6 @@ st.set_page_config(page_title="VTMS Reporting System", layout="wide")
 # 2. FILES
 # =========================================================
 MAINT_TEMPLATE_FILE = "maintenance_templates.json"
-INSTALL_TEMPLATE_FILE = "installation_templates.json"
 
 # =========================================================
 # 3. DEFAULT DATA
@@ -69,16 +68,6 @@ DEFAULT_MAINTENANCE_SECTIONS = [
     }
 ]
 
-DEFAULT_INSTALLATION_SECTIONS = [
-    "3.0 INSTALLATION PHOTO 1",
-    "4.0 INSTALLATION PHOTO 2",
-    "5.0 INSTALLATION PHOTO 3",
-    "6.0 INSTALLATION PHOTO 4",
-    "7.0 INSTALLATION PHOTO 5",
-    "8.0 INSTALLATION PHOTO 6",
-    "9.0 INSTALLATION PHOTO 7"
-]
-
 # =========================================================
 # 4. TEMPLATE STORAGE
 # =========================================================
@@ -108,28 +97,17 @@ ensure_json_file(
     {"Default Maintenance": DEFAULT_MAINTENANCE_SECTIONS}
 )
 
-ensure_json_file(
-    INSTALL_TEMPLATE_FILE,
-    {"Default Installation": DEFAULT_INSTALLATION_SECTIONS}
-)
-
 if "maintenance_templates" not in st.session_state:
     st.session_state["maintenance_templates"] = load_json_file(
         MAINT_TEMPLATE_FILE,
         {"Default Maintenance": DEFAULT_MAINTENANCE_SECTIONS}
     )
 
-if "installation_templates" not in st.session_state:
-    st.session_state["installation_templates"] = load_json_file(
-        INSTALL_TEMPLATE_FILE,
-        {"Default Installation": DEFAULT_INSTALLATION_SECTIONS}
-    )
-
 if "maintenance_sections" not in st.session_state:
     st.session_state["maintenance_sections"] = copy.deepcopy(DEFAULT_MAINTENANCE_SECTIONS)
 
-if "installation_sections" not in st.session_state:
-    st.session_state["installation_sections"] = copy.deepcopy(DEFAULT_INSTALLATION_SECTIONS)
+if "team_members" not in st.session_state:
+    st.session_state["team_members"] = ["Daus", "Amin", "XXX"]
 
 # =========================================================
 # 5. HELPERS
@@ -228,6 +206,61 @@ def pdf_split_lines(pdf_obj, width, text):
         return wrapped if wrapped else [""]
 
 
+def draw_attachment_grid(pdf, items, temp_files_to_delete, section_title="ATTACHMENTS"):
+    if not items:
+        return
+
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, section_title, 0, 1)
+    pdf.ln(5)
+
+    for i, item in enumerate(items):
+        if i > 0 and i % 4 == 0:
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, f"{section_title} (CONT'D)", 0, 1)
+            pdf.ln(5)
+
+        pos = i % 4
+        x = [20, 110][pos % 2]
+        y = [40, 155][pos // 2]
+
+        img_file = item.get("file") or item.get("image")
+        caption = item.get("label") or item.get("caption", "")
+        title = item.get("title", "")
+
+        processed = process_image(img_file, target_size=(900, 650))
+        if processed:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                processed.save(tmp.name, "JPEG")
+                tmp_path = tmp.name
+                temp_files_to_delete.append(tmp_path)
+
+            pdf.rect(x, y, 80, 95)
+            pdf.image(tmp_path, x=x + 2, y=y + 2, w=76, h=52)
+
+            if title:
+                pdf.set_xy(x + 3, y + 56)
+                pdf.set_font("Arial", "B", 7)
+                pdf.multi_cell(74, 4, title, 0, "C")
+
+                pdf.set_xy(x + 4, y + 68)
+                pdf.set_font("Arial", "", 7)
+                pdf.multi_cell(72, 4, caption, 0, "C")
+            else:
+                pdf.set_xy(x + 4, y + 62)
+                pdf.set_font("Arial", "", 8)
+                pdf.multi_cell(72, 5, caption, 0, "C")
+
+
+def format_team_members_list(team_members):
+    cleaned = [str(x).strip() for x in team_members if str(x).strip()]
+    if not cleaned:
+        return "NIL"
+    return "\n".join([f"{i}. {name}" for i, name in enumerate(cleaned, start=1)])
+
+
 # =========================================================
 # 6. PDF CLASS
 # =========================================================
@@ -309,9 +342,33 @@ with st.sidebar:
     header_txt = st.text_input("Header Title", "VTMS REPORT")
     doc_id = st.text_input("Document ID", "LPJPTP/VTMS/2026")
     loc = st.text_input("Location", "VTS TOWER, TANJUNG PELEPAS")
-    tech_name = st.text_input("Prepared By", "Daus Works")
-    client_name = st.text_input("Verified By", "Client Representative")
+
+    st.divider()
+    st.subheader("Team Details")
+
+    for idx in range(len(st.session_state["team_members"])):
+        c1, c2 = st.columns([5, 1])
+        st.session_state["team_members"][idx] = c1.text_input(
+            f"Team Member {idx + 1}",
+            value=st.session_state["team_members"][idx],
+            key=f"team_member_{idx}"
+        )
+        if c2.button("❌", key=f"delete_team_member_{idx}"):
+            st.session_state["team_members"].pop(idx)
+            st.rerun()
+
+    add_tm1, add_tm2 = st.columns([4, 1])
+    new_team_member = add_tm1.text_input("New Team Member", key="new_team_member")
+    if add_tm2.button("➕ Add"):
+        if new_team_member.strip():
+            st.session_state["team_members"].append(new_team_member.strip())
+            st.rerun()
+
+    prepared_by_name = st.text_input("Prepared By (Approver Name)", "Daus Works")
+    verified_by_name = st.text_input("Verified By (Approver Name)", "Client Representative")
     report_dt = st.date_input("Date", date.today()).strftime("%d/%m/%Y")
+
+team_details_formatted = format_team_members_list(st.session_state["team_members"])
 
 # =========================================================
 # 8. COMMON VARIABLES
@@ -343,6 +400,10 @@ if selected_template == "MAINTENANCE REPORT":
     c1, c2 = st.columns(2)
     equipment_name = c1.text_input("Equipment / System Name", "")
     maintenance_type = c2.text_input("Maintenance Type", "Preventive Maintenance")
+
+    st.divider()
+    st.subheader("Team Details Preview")
+    st.text(team_details_formatted)
 
     st.divider()
     st.subheader("Maintenance Template Manager")
@@ -494,7 +555,7 @@ if selected_template == "INSTALLATION REPORT":
     with c1:
         customer_name = st.text_input("Customer Name", "Telekom Malaysia")
         customer_address = st.text_area("Customer Address", "TM Pengerang")
-        onsite_team = st.text_input("Onsite Team", "Daus Works Team")
+        onsite_team = st.text_input("Onsite Team / Lead", "Daus Works Team")
 
     with c2:
         start_time = st.text_input("On Site Start Time", "08:30")
@@ -504,100 +565,48 @@ if selected_template == "INSTALLATION REPORT":
         problem = st.text_input("Problem / Scope", "New installation and commissioning")
 
     st.divider()
+    st.subheader("Team Details Preview")
+    st.text(team_details_formatted)
+
+    st.divider()
     remarks = st.text_area("Work Description / Remarks", height=120)
 
     st.divider()
-    st.subheader("Installation Template Manager")
+    st.subheader("Installation Photos (Dynamic)")
 
-    itm1, itm2, itm3 = st.columns([2, 1, 1])
-    selected_install_template = itm1.selectbox(
-        "Load Installation Template",
-        list(st.session_state["installation_templates"].keys()),
-        key="selected_install_template"
+    inst_files = st.file_uploader(
+        "Upload Installation Photo(s)",
+        type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
+        key="dynamic_installation_photos"
     )
 
-    if itm2.button("📂 Load Installation"):
-        st.session_state["installation_sections"] = copy.deepcopy(
-            st.session_state["installation_templates"][selected_install_template]
-        )
-        st.rerun()
+    if inst_files:
+        for idx, file in enumerate(inst_files):
+            st.markdown(f"### Photo {idx + 1}")
+            c1, c2 = st.columns([1, 1])
 
-    if itm3.button("♻️ Reset Installation"):
-        st.session_state["installation_sections"] = copy.deepcopy(DEFAULT_INSTALLATION_SECTIONS)
-        st.rerun()
+            with c1:
+                st.image(file, use_container_width=True)
 
-    itm4, itm5 = st.columns([3, 1])
-    new_install_template_name = itm4.text_input("Save Installation Template As", key="new_install_template_name")
-    if itm5.button("💾 Save Installation"):
-        if new_install_template_name.strip():
-            st.session_state["installation_templates"][new_install_template_name.strip()] = copy.deepcopy(
-                st.session_state["installation_sections"]
-            )
-            save_json_file(INSTALL_TEMPLATE_FILE, st.session_state["installation_templates"])
-            st.success("Installation template saved.")
+            with c2:
+                sec_title = st.text_input(
+                    f"Section Title for Photo {idx + 1}",
+                    value=f"{idx + 3}.0 INSTALLATION PHOTO {idx + 1}",
+                    key=f"dyn_inst_title_{idx}"
+                )
+                caption = st.text_area(
+                    f"Caption for Photo {idx + 1}",
+                    value=f"Installation photo {idx + 1}",
+                    key=f"dyn_inst_caption_{idx}",
+                    height=100
+                )
 
-    delete_it_col1, delete_it_col2 = st.columns([3, 1])
-    delete_install_template_name = delete_it_col1.selectbox(
-        "Delete Installation Template",
-        list(st.session_state["installation_templates"].keys()),
-        key="delete_install_template_name"
-    )
-    if delete_it_col2.button("🗑️ Delete Installation"):
-        if delete_install_template_name != "Default Installation":
-            del st.session_state["installation_templates"][delete_install_template_name]
-            save_json_file(INSTALL_TEMPLATE_FILE, st.session_state["installation_templates"])
-            st.success("Installation template deleted.")
-            st.rerun()
-        else:
-            st.warning("Default Installation tidak boleh dipadam.")
-
-    st.divider()
-    st.subheader("Installation Photo Sections (3.0 - 9.0)")
-
-    add_i1, add_i2 = st.columns([3, 1])
-    new_install_section = add_i1.text_input("New Installation Section", key="new_install_section")
-    if add_i2.button("➕ Add Photo Section"):
-        if new_install_section.strip():
-            st.session_state["installation_sections"].append(new_install_section.strip())
-            st.rerun()
-
-    st.divider()
-
-    for idx, val in enumerate(st.session_state["installation_sections"]):
-        row1, row2 = st.columns([5, 1])
-        st.session_state["installation_sections"][idx] = row1.text_input(
-            f"Section Title {idx+1}",
-            value=val,
-            key=f"inst_title_{idx}"
-        )
-        if row2.button("❌", key=f"del_inst_sec_{idx}"):
-            st.session_state["installation_sections"].pop(idx)
-            st.rerun()
-
-    st.divider()
-
-    for i, sec_title in enumerate(st.session_state["installation_sections"]):
-        st.markdown(f"### {sec_title}")
-
-        imgs = st.file_uploader(
-            f"Upload Image(s) for {sec_title}",
-            type=["png", "jpg", "jpeg"],
-            accept_multiple_files=True,
-            key=f"inst_upload_{i}"
-        )
-
-        caption = st.text_area(
-            f"Caption for {sec_title}",
-            value=f"{sec_title} completed",
-            key=f"inst_caption_{i}",
-            height=80
-        )
-
-        installation_results.append({
-            "title": sec_title,
-            "images": imgs,
-            "caption": caption
-        })
+            installation_results.append({
+                "title": sec_title,
+                "image": file,
+                "caption": caption
+            })
 
     st.divider()
     parts_used = st.text_area("Parts Used", height=100)
@@ -685,6 +694,11 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                 pdf.set_font("Arial", "", 10)
                 pdf.cell(0, 6, f"Equipment / System Name : {equipment_name}", 0, 1)
                 pdf.cell(0, 6, f"Maintenance Type : {maintenance_type}", 0, 1)
+                pdf.ln(2)
+                pdf.set_font("Arial", "B", 10)
+                pdf.cell(0, 6, "Team Details :", 0, 1)
+                pdf.set_font("Arial", "", 10)
+                pdf.multi_cell(0, 6, team_details_formatted)
                 pdf.ln(3)
 
                 h_l, w_l = headers, widths
@@ -743,32 +757,12 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                 pdf.set_font("Arial", "", 10)
                 pdf.multi_cell(0, 6, remarks)
 
-                if evidence_data:
-                    pdf.add_page()
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 10, "3.0    EVIDENCE", 0, 1)
-                    pdf.ln(5)
-
-                    for i, ev in enumerate(evidence_data):
-                        if i > 0 and i % 4 == 0:
-                            pdf.add_page()
-
-                        pos = i % 4
-                        x = [20, 110][pos % 2]
-                        y = [40, 145][pos // 2]
-
-                        processed_img = process_image(ev["file"])
-                        if processed_img:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_ev:
-                                processed_img.save(tmp_ev.name, "JPEG")
-                                tmp_path = tmp_ev.name
-                                temp_files_to_delete.append(tmp_path)
-
-                            pdf.rect(x, y, 80, 80)
-                            pdf.image(tmp_path, x=x + 2, y=y + 2, w=76, h=60)
-                            pdf.set_xy(x, y + 65)
-                            pdf.set_font("Arial", "", 9)
-                            pdf.multi_cell(80, 5, ev["label"], 0, "C")
+                draw_attachment_grid(
+                    pdf,
+                    evidence_data,
+                    temp_files_to_delete,
+                    section_title="3.0    ATTACHMENTS"
+                )
 
             # =================================================
             # INSTALLATION PDF
@@ -781,13 +775,18 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                 pdf.set_font("Arial", "", 10)
                 pdf.cell(0, 6, f"Customer Name : {customer_name}", 0, 1)
                 pdf.multi_cell(0, 6, f"Customer Address : {customer_address}")
-                pdf.cell(0, 6, f"Onsite Team : {onsite_team}", 0, 1)
+                pdf.cell(0, 6, f"Onsite Team / Lead : {onsite_team}", 0, 1)
                 pdf.cell(0, 6, f"Onsite Date : {report_dt}", 0, 1)
                 pdf.cell(0, 6, f"Start Time : {start_time}", 0, 1)
                 pdf.cell(0, 6, f"Completed Time : {end_time}", 0, 1)
                 pdf.cell(0, 6, f"Category : {category}", 0, 1)
                 pdf.cell(0, 6, f"Service : {service}", 0, 1)
                 pdf.multi_cell(0, 6, f"Problem / Scope : {problem}")
+                pdf.ln(2)
+                pdf.set_font("Arial", "B", 10)
+                pdf.cell(0, 6, "Team Details :", 0, 1)
+                pdf.set_font("Arial", "", 10)
+                pdf.multi_cell(0, 6, team_details_formatted)
 
                 pdf.ln(3)
                 pdf.set_font("Arial", "B", 12)
@@ -795,47 +794,16 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                 pdf.set_font("Arial", "", 10)
                 pdf.multi_cell(0, 6, remarks)
 
-                for sec in installation_results:
-                    pdf.add_page()
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 10, sec["title"], 0, 1)
-
-                    images = sec["images"] if sec["images"] else []
-
-                    if len(images) == 1:
-                        processed = process_image(images[0])
-                        if processed:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                                processed.save(tmp.name, "JPEG")
-                                tmp_path = tmp.name
-                                temp_files_to_delete.append(tmp_path)
-
-                            pdf.rect(20, 40, 170, 130)
-                            pdf.image(tmp_path, x=22, y=42, w=166, h=120)
-
-                    elif len(images) >= 2:
-                        for img_idx, img in enumerate(images[:2]):
-                            processed = process_image(img)
-                            if processed:
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                                    processed.save(tmp.name, "JPEG")
-                                    tmp_path = tmp.name
-                                    temp_files_to_delete.append(tmp_path)
-
-                                if img_idx == 0:
-                                    pdf.rect(20, 35, 170, 90)
-                                    pdf.image(tmp_path, x=22, y=37, w=166, h=80)
-                                else:
-                                    pdf.rect(20, 145, 170, 90)
-                                    pdf.image(tmp_path, x=22, y=147, w=166, h=80)
-
-                    pdf.set_y(245)
-                    pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(0, 6, f"Caption: {sec['caption']}")
+                draw_attachment_grid(
+                    pdf,
+                    installation_results,
+                    temp_files_to_delete,
+                    section_title="3.0    INSTALLATION ATTACHMENTS"
+                )
 
                 pdf.add_page()
                 pdf.set_font("Arial", "B", 12)
-                pdf.cell(0, 10, "10.0    PARTS USED", 0, 1)
+                pdf.cell(0, 10, "4.0    PARTS USED", 0, 1)
                 pdf.set_font("Arial", "", 10)
                 pdf.multi_cell(0, 6, parts_used if parts_used.strip() else "NIL")
 
@@ -872,9 +840,9 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
 
             pdf.set_font("Arial", "B", 10)
             pdf.set_x(15)
-            pdf.cell(90, 8, f"PREPARED BY: {tech_name}", 0, 0, "C")
+            pdf.cell(90, 8, f"PREPARED BY: {prepared_by_name}", 0, 0, "C")
             pdf.set_x(105)
-            pdf.cell(90, 8, f"VERIFIED BY: {client_name}", 0, 1, "C")
+            pdf.cell(90, 8, f"VERIFIED BY: {verified_by_name}", 0, 1, "C")
 
             pdf.set_font("Arial", "I", 8)
             pdf.set_x(15)
