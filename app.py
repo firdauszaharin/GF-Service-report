@@ -1,11 +1,13 @@
 import streamlit as st
 from fpdf import FPDF
 import os
+import json
 import base64
 import tempfile
 from datetime import datetime, timedelta, timezone, date
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
+import copy
 
 # =========================================================
 # 1. PAGE CONFIG
@@ -13,59 +15,124 @@ from streamlit_drawable_canvas import st_canvas
 st.set_page_config(page_title="VTMS Reporting System", layout="wide")
 
 # =========================================================
-# 2. TEMPLATES
+# 2. FILES
 # =========================================================
-TEMPLATES = {
-    "MAINTENANCE REPORT": {
-        "type": "maintenance",
-        "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-        "widths": [10, 110, 15, 15, 40],
-        "content": [
-            ["1.0 PHYSICAL INSPECTION", [
-                "No physical defect",
-                "Equipment condition satisfactory",
-                "Cable / connector inspection",
-                "Housekeeping"
-            ]],
-            ["2.0 POWER / HARDWARE CHECK", [
-                "Power status normal",
-                "Indicator / alarm status normal",
-                "Check hardware condition",
-                "Check grounding / protection"
-            ]],
-            ["3.0 NETWORK / COMMUNICATION CHECK", [
-                "Network connectivity test",
-                "Communication test",
-                "Data transmission / receiving test"
-            ]],
-            ["4.0 SOFTWARE / SYSTEM CHECK", [
-                "Software functioning normally",
-                "System log check",
-                "Error / alarm check",
-                "Backup / storage check"
-            ]],
-            ["5.0 CORRECTIVE / REMARKS", [
-                "Adjustment / cleaning performed",
-                "Repair / replacement required",
-                "Further monitoring required"
-            ]]
-        ]
-    },
-    "INSTALLATION REPORT": {
-        "type": "installation",
-        "sections": [
-            "Pre-Installation Preparation",
-            "Equipment Installation",
-            "Power and Cabling",
-            "Network Configuration",
-            "Testing and Commissioning",
-            "Final Verification"
-        ]
-    }
-}
+MAINT_TEMPLATE_FILE = "maintenance_templates.json"
+INSTALL_TEMPLATE_FILE = "installation_templates.json"
 
 # =========================================================
-# 3. HELPERS
+# 3. DEFAULT DATA
+# =========================================================
+DEFAULT_MAINTENANCE_SECTIONS = [
+    {
+        "title": "1.0 PHYSICAL INSPECTION",
+        "tasks": [
+            "No physical defect",
+            "Equipment condition satisfactory",
+            "Cable / connector inspection",
+            "Housekeeping"
+        ]
+    },
+    {
+        "title": "2.0 POWER / HARDWARE CHECK",
+        "tasks": [
+            "Power status normal",
+            "Indicator / alarm status normal",
+            "Check hardware condition",
+            "Check grounding / protection"
+        ]
+    },
+    {
+        "title": "3.0 NETWORK / COMMUNICATION CHECK",
+        "tasks": [
+            "Network connectivity test",
+            "Communication test",
+            "Data transmission / receiving test"
+        ]
+    },
+    {
+        "title": "4.0 SOFTWARE / SYSTEM CHECK",
+        "tasks": [
+            "Software functioning normally",
+            "System log check",
+            "Error / alarm check",
+            "Backup / storage check"
+        ]
+    },
+    {
+        "title": "5.0 CORRECTIVE / REMARKS",
+        "tasks": [
+            "Adjustment / cleaning performed",
+            "Repair / replacement required",
+            "Further monitoring required"
+        ]
+    }
+]
+
+DEFAULT_INSTALLATION_SECTIONS = [
+    "3.0 INSTALLATION PHOTO 1",
+    "4.0 INSTALLATION PHOTO 2",
+    "5.0 INSTALLATION PHOTO 3",
+    "6.0 INSTALLATION PHOTO 4",
+    "7.0 INSTALLATION PHOTO 5",
+    "8.0 INSTALLATION PHOTO 6",
+    "9.0 INSTALLATION PHOTO 7"
+]
+
+# =========================================================
+# 4. TEMPLATE STORAGE
+# =========================================================
+def ensure_json_file(filepath, default_content):
+    if not os.path.exists(filepath):
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(default_content, f, indent=4, ensure_ascii=False)
+
+
+def load_json_file(filepath, fallback):
+    try:
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return copy.deepcopy(fallback)
+
+
+def save_json_file(filepath, content):
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(content, f, indent=4, ensure_ascii=False)
+
+
+ensure_json_file(
+    MAINT_TEMPLATE_FILE,
+    {"Default Maintenance": DEFAULT_MAINTENANCE_SECTIONS}
+)
+
+ensure_json_file(
+    INSTALL_TEMPLATE_FILE,
+    {"Default Installation": DEFAULT_INSTALLATION_SECTIONS}
+)
+
+if "maintenance_templates" not in st.session_state:
+    st.session_state["maintenance_templates"] = load_json_file(
+        MAINT_TEMPLATE_FILE,
+        {"Default Maintenance": DEFAULT_MAINTENANCE_SECTIONS}
+    )
+
+if "installation_templates" not in st.session_state:
+    st.session_state["installation_templates"] = load_json_file(
+        INSTALL_TEMPLATE_FILE,
+        {"Default Installation": DEFAULT_INSTALLATION_SECTIONS}
+    )
+
+if "maintenance_sections" not in st.session_state:
+    st.session_state["maintenance_sections"] = copy.deepcopy(DEFAULT_MAINTENANCE_SECTIONS)
+
+if "installation_sections" not in st.session_state:
+    st.session_state["installation_sections"] = copy.deepcopy(DEFAULT_INSTALLATION_SECTIONS)
+
+# =========================================================
+# 5. HELPERS
 # =========================================================
 def process_image(img_input, target_size=(1000, 700)):
     if img_input is None:
@@ -112,7 +179,6 @@ def process_uploaded_signature(uploaded_file, target_size=(600, 200)):
         return None
     try:
         img = Image.open(uploaded_file).convert("RGBA")
-
         try:
             alpha = img.getchannel("A")
             bbox = alpha.getbbox()
@@ -163,7 +229,7 @@ def pdf_split_lines(pdf_obj, width, text):
 
 
 # =========================================================
-# 4. PDF CLASS
+# 6. PDF CLASS
 # =========================================================
 class ReportPDF(FPDF):
     def __init__(self, header_title=""):
@@ -222,7 +288,7 @@ class ReportPDF(FPDF):
 
 
 # =========================================================
-# 5. SIDEBAR
+# 7. SIDEBAR
 # =========================================================
 with st.sidebar:
     FIXED_LOGO_PATH = "logo.png"
@@ -232,8 +298,10 @@ with st.sidebar:
     else:
         st.warning("Logo tidak dijumpai. Report masih boleh dijana tanpa logo.")
 
-    st.divider()
-    selected_template = st.selectbox("Template Type", list(TEMPLATES.keys()))
+    selected_template = st.selectbox(
+        "Template Type",
+        ["MAINTENANCE REPORT", "INSTALLATION REPORT"]
+    )
 
     st.divider()
     sys_owner = st.text_area("System Owner", "LEMBAGA PELABUHAN JOHOR")
@@ -245,16 +313,17 @@ with st.sidebar:
     client_name = st.text_input("Verified By", "Client Representative")
     report_dt = st.date_input("Date", date.today()).strftime("%d/%m/%Y")
 
-config = TEMPLATES[selected_template]
-
 # =========================================================
-# 6. MAINTENANCE REPORT UI
+# 8. COMMON VARIABLES
 # =========================================================
+remarks = ""
+parts_used = ""
 maintenance_results = []
 installation_results = []
 evidence_data = []
-remarks = ""
-parts_used = ""
+
+equipment_name = ""
+maintenance_type = ""
 
 customer_name = ""
 customer_address = ""
@@ -265,7 +334,10 @@ category = ""
 service = ""
 problem = ""
 
-if config["type"] == "maintenance":
+# =========================================================
+# 9. MAINTENANCE REPORT UI
+# =========================================================
+if selected_template == "MAINTENANCE REPORT":
     st.header("📋 MAINTENANCE REPORT")
 
     c1, c2 = st.columns(2)
@@ -273,29 +345,134 @@ if config["type"] == "maintenance":
     maintenance_type = c2.text_input("Maintenance Type", "Preventive Maintenance")
 
     st.divider()
+    st.subheader("Maintenance Template Manager")
 
-    for sec_idx, (sec, tasks) in enumerate(config["content"]):
-        maintenance_results.append({"task": sec, "res": "TITLE", "com": ""})
+    ctm1, ctm2, ctm3 = st.columns([2, 1, 1])
+    selected_maint_template = ctm1.selectbox(
+        "Load Maintenance Template",
+        list(st.session_state["maintenance_templates"].keys()),
+        key="selected_maint_template"
+    )
 
-        with st.expander(sec, expanded=True):
-            for t_idx, t in enumerate(tasks):
-                u_key = f"{sec_idx}_{t_idx}"
+    if ctm2.button("📂 Load Template"):
+        st.session_state["maintenance_sections"] = copy.deepcopy(
+            st.session_state["maintenance_templates"][selected_maint_template]
+        )
+        st.rerun()
+
+    if ctm3.button("♻️ Reset Default"):
+        st.session_state["maintenance_sections"] = copy.deepcopy(DEFAULT_MAINTENANCE_SECTIONS)
+        st.rerun()
+
+    ctm4, ctm5 = st.columns([3, 1])
+    new_maint_template_name = ctm4.text_input("Save As Template Name", key="new_maint_template_name")
+    if ctm5.button("💾 Save Template"):
+        if new_maint_template_name.strip():
+            st.session_state["maintenance_templates"][new_maint_template_name.strip()] = copy.deepcopy(
+                st.session_state["maintenance_sections"]
+            )
+            save_json_file(MAINT_TEMPLATE_FILE, st.session_state["maintenance_templates"])
+            st.success("Maintenance template saved.")
+
+    delete_mt_col1, delete_mt_col2 = st.columns([3, 1])
+    delete_maint_template_name = delete_mt_col1.selectbox(
+        "Delete Maintenance Template",
+        list(st.session_state["maintenance_templates"].keys()),
+        key="delete_maint_template_name"
+    )
+    if delete_mt_col2.button("🗑️ Delete Template"):
+        if delete_maint_template_name != "Default Maintenance":
+            del st.session_state["maintenance_templates"][delete_maint_template_name]
+            save_json_file(MAINT_TEMPLATE_FILE, st.session_state["maintenance_templates"])
+            st.success("Maintenance template deleted.")
+            st.rerun()
+        else:
+            st.warning("Default Maintenance tidak boleh dipadam.")
+
+    st.divider()
+    st.subheader("Checklist Template Editor")
+
+    add_sec_col1, add_sec_col2 = st.columns([2, 1])
+    new_section_name = add_sec_col1.text_input("New Section Name", key="new_maintenance_section")
+    if add_sec_col2.button("➕ Add Section"):
+        if new_section_name.strip():
+            st.session_state["maintenance_sections"].append({
+                "title": new_section_name.strip(),
+                "tasks": ["New Task"]
+            })
+            st.rerun()
+
+    st.divider()
+
+    for sec_idx, sec in enumerate(st.session_state["maintenance_sections"]):
+        with st.expander(f"Section {sec_idx+1}", expanded=True):
+            title_col1, title_col2 = st.columns([4, 1])
+
+            sec["title"] = title_col1.text_input(
+                "Section Title",
+                value=sec["title"],
+                key=f"sec_title_{sec_idx}"
+            )
+
+            if title_col2.button("🗑️ Delete Section", key=f"del_sec_{sec_idx}"):
+                st.session_state["maintenance_sections"].pop(sec_idx)
+                st.rerun()
+
+            st.markdown("**Tasks**")
+
+            for task_idx, task in enumerate(sec["tasks"]):
+                tcol1, tcol2 = st.columns([5, 1])
+                sec["tasks"][task_idx] = tcol1.text_input(
+                    f"Task {task_idx+1}",
+                    value=task,
+                    key=f"task_{sec_idx}_{task_idx}"
+                )
+                if tcol2.button("❌", key=f"del_task_{sec_idx}_{task_idx}"):
+                    st.session_state["maintenance_sections"][sec_idx]["tasks"].pop(task_idx)
+                    st.rerun()
+
+            add_task_col1, add_task_col2 = st.columns([4, 1])
+            new_task = add_task_col1.text_input("New Task", key=f"new_task_{sec_idx}")
+            if add_task_col2.button("➕ Add Task", key=f"add_task_{sec_idx}"):
+                if new_task.strip():
+                    st.session_state["maintenance_sections"][sec_idx]["tasks"].append(new_task.strip())
+                    st.rerun()
+
+    st.divider()
+    st.subheader("Maintenance Checklist")
+
+    headers = ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"]
+    widths = [10, 110, 15, 15, 40]
+
+    for sec_idx, sec in enumerate(st.session_state["maintenance_sections"]):
+        maintenance_results.append({"task": sec["title"], "res": "TITLE", "com": ""})
+        with st.expander(sec["title"], expanded=True):
+            for task_idx, task in enumerate(sec["tasks"]):
                 c1, c2 = st.columns([1, 2])
-                res = c1.radio(t, ["PASS", "FAIL", "N/A"], key=f"rad_{u_key}", horizontal=True)
-                rem = c2.text_input("Remarks", key=f"rem_{u_key}")
+                res = c1.radio(
+                    task,
+                    ["PASS", "FAIL", "N/A"],
+                    key=f"rad_{sec_idx}_{task_idx}",
+                    horizontal=True
+                )
+                rem = c2.text_input("Remarks", key=f"rem_{sec_idx}_{task_idx}")
                 maintenance_results.append({
-                    "task": t,
+                    "task": task,
                     "res": res,
                     "com": rem
                 })
 
     st.divider()
-    st.subheader("Summary / Findings")
     remarks = st.text_area("Maintenance Summary / Remarks", height=120)
 
     st.divider()
     st.subheader("Evidence")
-    u_files = st.file_uploader("Upload Evidence", accept_multiple_files=True, type=["png", "jpg", "jpeg"], key="maintenance_evidence")
+    u_files = st.file_uploader(
+        "Upload Evidence",
+        accept_multiple_files=True,
+        type=["png", "jpg", "jpeg"],
+        key="maintenance_evidence"
+    )
 
     if u_files:
         cols = st.columns(4)
@@ -306,9 +483,9 @@ if config["type"] == "maintenance":
                 evidence_data.append({"file": f, "label": cap})
 
 # =========================================================
-# 7. INSTALLATION REPORT UI
+# 10. INSTALLATION REPORT UI
 # =========================================================
-if config["type"] == "installation":
+if selected_template == "INSTALLATION REPORT":
     st.header("📋 INSTALLATION REPORT")
 
     st.subheader("Site Information")
@@ -330,20 +507,94 @@ if config["type"] == "installation":
     remarks = st.text_area("Work Description / Remarks", height=120)
 
     st.divider()
-    st.subheader("Installation Activities")
+    st.subheader("Installation Template Manager")
 
-    for i, sec in enumerate(config["sections"]):
-        st.markdown(f"### {sec}")
+    itm1, itm2, itm3 = st.columns([2, 1, 1])
+    selected_install_template = itm1.selectbox(
+        "Load Installation Template",
+        list(st.session_state["installation_templates"].keys()),
+        key="selected_install_template"
+    )
+
+    if itm2.button("📂 Load Installation"):
+        st.session_state["installation_sections"] = copy.deepcopy(
+            st.session_state["installation_templates"][selected_install_template]
+        )
+        st.rerun()
+
+    if itm3.button("♻️ Reset Installation"):
+        st.session_state["installation_sections"] = copy.deepcopy(DEFAULT_INSTALLATION_SECTIONS)
+        st.rerun()
+
+    itm4, itm5 = st.columns([3, 1])
+    new_install_template_name = itm4.text_input("Save Installation Template As", key="new_install_template_name")
+    if itm5.button("💾 Save Installation"):
+        if new_install_template_name.strip():
+            st.session_state["installation_templates"][new_install_template_name.strip()] = copy.deepcopy(
+                st.session_state["installation_sections"]
+            )
+            save_json_file(INSTALL_TEMPLATE_FILE, st.session_state["installation_templates"])
+            st.success("Installation template saved.")
+
+    delete_it_col1, delete_it_col2 = st.columns([3, 1])
+    delete_install_template_name = delete_it_col1.selectbox(
+        "Delete Installation Template",
+        list(st.session_state["installation_templates"].keys()),
+        key="delete_install_template_name"
+    )
+    if delete_it_col2.button("🗑️ Delete Installation"):
+        if delete_install_template_name != "Default Installation":
+            del st.session_state["installation_templates"][delete_install_template_name]
+            save_json_file(INSTALL_TEMPLATE_FILE, st.session_state["installation_templates"])
+            st.success("Installation template deleted.")
+            st.rerun()
+        else:
+            st.warning("Default Installation tidak boleh dipadam.")
+
+    st.divider()
+    st.subheader("Installation Photo Sections (3.0 - 9.0)")
+
+    add_i1, add_i2 = st.columns([3, 1])
+    new_install_section = add_i1.text_input("New Installation Section", key="new_install_section")
+    if add_i2.button("➕ Add Photo Section"):
+        if new_install_section.strip():
+            st.session_state["installation_sections"].append(new_install_section.strip())
+            st.rerun()
+
+    st.divider()
+
+    for idx, val in enumerate(st.session_state["installation_sections"]):
+        row1, row2 = st.columns([5, 1])
+        st.session_state["installation_sections"][idx] = row1.text_input(
+            f"Section Title {idx+1}",
+            value=val,
+            key=f"inst_title_{idx}"
+        )
+        if row2.button("❌", key=f"del_inst_sec_{idx}"):
+            st.session_state["installation_sections"].pop(idx)
+            st.rerun()
+
+    st.divider()
+
+    for i, sec_title in enumerate(st.session_state["installation_sections"]):
+        st.markdown(f"### {sec_title}")
+
         imgs = st.file_uploader(
-            f"Upload Images for {sec}",
+            f"Upload Image(s) for {sec_title}",
             type=["png", "jpg", "jpeg"],
             accept_multiple_files=True,
-            key=f"inst_{i}"
+            key=f"inst_upload_{i}"
         )
-        caption = st.text_input("Caption", f"{sec} completed", key=f"cap_inst_{i}")
+
+        caption = st.text_area(
+            f"Caption for {sec_title}",
+            value=f"{sec_title} completed",
+            key=f"inst_caption_{i}",
+            height=80
+        )
 
         installation_results.append({
-            "title": sec,
+            "title": sec_title,
             "images": imgs,
             "caption": caption
         })
@@ -352,7 +603,7 @@ if config["type"] == "installation":
     parts_used = st.text_area("Parts Used", height=100)
 
 # =========================================================
-# 8. APPROVAL
+# 11. APPROVAL
 # =========================================================
 st.divider()
 st.header("✍️ APPROVAL")
@@ -396,7 +647,7 @@ with cb:
     )
 
 # =========================================================
-# 9. PDF GENERATION
+# 12. PDF GENERATION
 # =========================================================
 if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=True):
     p_img = get_signature_image(prepared_sig_upload, sig1.image_data)
@@ -420,10 +671,13 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
         temp_files_to_delete = []
 
         try:
-            # =========================================
-            # MAINTENANCE REPORT PDF
-            # =========================================
-            if config["type"] == "maintenance":
+            # =================================================
+            # MAINTENANCE PDF
+            # =================================================
+            if selected_template == "MAINTENANCE REPORT":
+                headers = ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"]
+                widths = [10, 110, 15, 15, 40]
+
                 pdf.add_page()
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "1.0    MAINTENANCE DETAILS / CHECKLIST", 0, 1)
@@ -433,7 +687,7 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                 pdf.cell(0, 6, f"Maintenance Type : {maintenance_type}", 0, 1)
                 pdf.ln(3)
 
-                h_l, w_l = config["headers"], config["widths"]
+                h_l, w_l = headers, widths
                 pdf.set_font("Arial", "B", 8)
                 pdf.set_fill_color(230, 230, 230)
 
@@ -516,10 +770,10 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                             pdf.set_font("Arial", "", 9)
                             pdf.multi_cell(80, 5, ev["label"], 0, "C")
 
-            # =========================================
-            # INSTALLATION REPORT PDF
-            # =========================================
-            if config["type"] == "installation":
+            # =================================================
+            # INSTALLATION PDF
+            # =================================================
+            if selected_template == "INSTALLATION REPORT":
                 pdf.add_page()
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "1.0    SITE INFORMATION", 0, 1)
@@ -541,15 +795,26 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                 pdf.set_font("Arial", "", 10)
                 pdf.multi_cell(0, 6, remarks)
 
-                page_no = 3
                 for sec in installation_results:
                     pdf.add_page()
                     pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 10, f"{page_no}.0    {sec['title'].upper()}", 0, 1)
-                    page_no += 1
+                    pdf.cell(0, 10, sec["title"], 0, 1)
 
-                    if sec["images"]:
-                        for img_idx, img in enumerate(sec["images"][:2]):
+                    images = sec["images"] if sec["images"] else []
+
+                    if len(images) == 1:
+                        processed = process_image(images[0])
+                        if processed:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                                processed.save(tmp.name, "JPEG")
+                                tmp_path = tmp.name
+                                temp_files_to_delete.append(tmp_path)
+
+                            pdf.rect(20, 40, 170, 130)
+                            pdf.image(tmp_path, x=22, y=42, w=166, h=120)
+
+                    elif len(images) >= 2:
+                        for img_idx, img in enumerate(images[:2]):
                             processed = process_image(img)
                             if processed:
                                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
@@ -570,13 +835,13 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
 
                 pdf.add_page()
                 pdf.set_font("Arial", "B", 12)
-                pdf.cell(0, 10, f"{page_no}.0    PARTS USED", 0, 1)
+                pdf.cell(0, 10, "10.0    PARTS USED", 0, 1)
                 pdf.set_font("Arial", "", 10)
                 pdf.multi_cell(0, 6, parts_used if parts_used.strip() else "NIL")
 
-            # =========================================
+            # =================================================
             # APPROVAL PAGE
-            # =========================================
+            # =================================================
             pdf.add_page()
             pdf.set_font("Arial", "B", 12)
             pdf.cell(0, 10, "APPROVAL & ACCEPTANCE", 0, 1)
@@ -617,9 +882,9 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
             pdf.set_x(105)
             pdf.cell(90, 5, f"MYT: {gen_timestamp}", 0, 1, "C")
 
-            # =========================================
+            # =================================================
             # OUTPUT
-            # =========================================
+            # =================================================
             pdf_output = pdf.output(dest="S")
             final_bytes = pdf_output.encode("latin-1") if isinstance(pdf_output, str) else bytes(pdf_output)
 
