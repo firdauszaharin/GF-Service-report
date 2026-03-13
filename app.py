@@ -342,33 +342,9 @@ with st.sidebar:
     header_txt = st.text_input("Header Title", "VTMS REPORT")
     doc_id = st.text_input("Document ID", "LPJPTP/VTMS/2026")
     loc = st.text_input("Location", "VTS TOWER, TANJUNG PELEPAS")
-
-    st.divider()
-    st.subheader("Team Details")
-
-    for idx in range(len(st.session_state["team_members"])):
-        c1, c2 = st.columns([5, 1])
-        st.session_state["team_members"][idx] = c1.text_input(
-            f"Team Member {idx + 1}",
-            value=st.session_state["team_members"][idx],
-            key=f"team_member_{idx}"
-        )
-        if c2.button("❌", key=f"delete_team_member_{idx}"):
-            st.session_state["team_members"].pop(idx)
-            st.rerun()
-
-    add_tm1, add_tm2 = st.columns([4, 1])
-    new_team_member = add_tm1.text_input("New Team Member", key="new_team_member")
-    if add_tm2.button("➕ Add"):
-        if new_team_member.strip():
-            st.session_state["team_members"].append(new_team_member.strip())
-            st.rerun()
-
     prepared_by_name = st.text_input("Prepared By (Approver Name)", "Daus Works")
     verified_by_name = st.text_input("Verified By (Approver Name)", "Client Representative")
     report_dt = st.date_input("Date", date.today()).strftime("%d/%m/%Y")
-
-team_details_formatted = format_team_members_list(st.session_state["team_members"])
 
 # =========================================================
 # 8. COMMON VARIABLES
@@ -392,7 +368,33 @@ service = ""
 problem = ""
 
 # =========================================================
-# 9. MAINTENANCE REPORT UI
+# 9. TEAM DETAILS INPUT
+# =========================================================
+st.divider()
+st.subheader("👥 Team Details")
+
+for idx in range(len(st.session_state["team_members"])):
+    col1, col2 = st.columns([5, 1])
+    st.session_state["team_members"][idx] = col1.text_input(
+        f"Team Member {idx + 1}",
+        value=st.session_state["team_members"][idx],
+        key=f"team_member_{idx}"
+    )
+    if col2.button("❌", key=f"delete_team_member_{idx}"):
+        st.session_state["team_members"].pop(idx)
+        st.rerun()
+
+add_tm1, add_tm2 = st.columns([4, 1])
+new_team_member = add_tm1.text_input("New Team Member", key="new_team_member")
+if add_tm2.button("➕ Add Team Member"):
+    if new_team_member.strip():
+        st.session_state["team_members"].append(new_team_member.strip())
+        st.rerun()
+
+team_details_formatted = format_team_members_list(st.session_state["team_members"])
+
+# =========================================================
+# 10. MAINTENANCE REPORT UI
 # =========================================================
 if selected_template == "MAINTENANCE REPORT":
     st.header("📋 MAINTENANCE REPORT")
@@ -400,10 +402,6 @@ if selected_template == "MAINTENANCE REPORT":
     c1, c2 = st.columns(2)
     equipment_name = c1.text_input("Equipment / System Name", "")
     maintenance_type = c2.text_input("Maintenance Type", "Preventive Maintenance")
-
-    st.divider()
-    st.subheader("Team Details Preview")
-    st.text(team_details_formatted)
 
     st.divider()
     st.subheader("Maintenance Template Manager")
@@ -544,7 +542,7 @@ if selected_template == "MAINTENANCE REPORT":
                 evidence_data.append({"file": f, "label": cap})
 
 # =========================================================
-# 10. INSTALLATION REPORT UI
+# 11. INSTALLATION REPORT UI
 # =========================================================
 if selected_template == "INSTALLATION REPORT":
     st.header("📋 INSTALLATION REPORT")
@@ -563,10 +561,6 @@ if selected_template == "INSTALLATION REPORT":
         category = st.text_input("Category", "Installation")
         service = st.text_input("Service", "Equipment Installation")
         problem = st.text_input("Problem / Scope", "New installation and commissioning")
-
-    st.divider()
-    st.subheader("Team Details Preview")
-    st.text(team_details_formatted)
 
     st.divider()
     remarks = st.text_area("Work Description / Remarks", height=120)
@@ -612,7 +606,7 @@ if selected_template == "INSTALLATION REPORT":
     parts_used = st.text_area("Parts Used", height=100)
 
 # =========================================================
-# 11. APPROVAL
+# 12. APPROVAL
 # =========================================================
 st.divider()
 st.header("✍️ APPROVAL")
@@ -656,7 +650,7 @@ with cb:
     )
 
 # =========================================================
-# 12. PDF GENERATION
+# 13. PDF GENERATION
 # =========================================================
 if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=True):
     p_img = get_signature_image(prepared_sig_upload, sig1.image_data)
