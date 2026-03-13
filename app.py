@@ -159,9 +159,9 @@ if "all_templates" not in st.session_state:
 if "issue_list" not in st.session_state:
     st.session_state["issue_list"] = []
 
+
 # =========================================================
 # 4. S/N DATABASE
-# note: key mesti sama exact dengan task text
 # =========================================================
 sn_database = {
     "Check SN :": [
@@ -237,13 +237,46 @@ def process_signature(img_input):
         return None
 
 
+def process_uploaded_signature(uploaded_file, target_size=(600, 200)):
+    if uploaded_file is None:
+        return None
+
+    try:
+        img = Image.open(uploaded_file).convert("RGBA")
+
+        # crop ikut content jika ada transparency
+        try:
+            alpha = img.getchannel("A")
+            bbox = alpha.getbbox()
+            if bbox:
+                img = img.crop(bbox)
+        except Exception:
+            pass
+
+        background = Image.new("RGB", target_size, (255, 255, 255))
+        img.thumbnail(target_size, Image.Resampling.LANCZOS)
+        offset = ((target_size[0] - img.size[0]) // 2, (target_size[1] - img.size[1]) // 2)
+        background.paste(img, offset, mask=img.getchannel("A"))
+        return background
+    except Exception as e:
+        st.error(f"Error processing uploaded signature: {e}")
+        return None
+
+
+def get_signature_image(uploaded_file, canvas_image_data):
+    # priority: upload image > canvas drawing
+    uploaded_sig = process_uploaded_signature(uploaded_file)
+    if uploaded_sig is not None:
+        return uploaded_sig
+    return process_signature(canvas_image_data)
+
+
 def pdf_split_lines(pdf_obj, width, text):
     text = "" if text is None else str(text)
     try:
         lines = pdf_obj.multi_cell(width, 5, text, split_only=True)
         return lines if lines else [""]
     except TypeError:
-        # fallback jika versi fpdf tak support split_only
         if not text.strip():
             return [""]
         approx_chars = max(1, int(width * 1.8))
@@ -422,6 +455,7 @@ with st.sidebar:
     client_name = st.text_input("Client Name", "NAZAME")
     report_dt = st.date_input("Date", date.today()).strftime("%d/%m/%Y")
 
+
 # =========================================================
 # 8. CHECKLIST RENDER
 # =========================================================
@@ -469,6 +503,7 @@ for sec_idx, (sec, tasks) in enumerate(config["content"]):
                     "com": rem
                 })
 
+
 # =========================================================
 # 9. SUMMARY & ISSUES
 # =========================================================
@@ -483,6 +518,7 @@ for i, item in enumerate(st.session_state["issue_list"]):
 if st.button("➕ Add Issue"):
     st.session_state["issue_list"].append({"issue": "", "Remarks": ""})
     st.rerun()
+
 
 # =========================================================
 # 10. EVIDENCE
@@ -501,6 +537,7 @@ if u_files:
             cap = st.text_input(f"Caption {idx+1}", f"Evidence {idx+1}", key=f"cap_{idx}")
             evidence_data.append({"file": f, "label": cap})
 
+
 # =========================================================
 # 11. SIGNATURES
 # =========================================================
@@ -508,23 +545,53 @@ st.divider()
 st.header("✍️ APPROVAL")
 
 ca, cb = st.columns(2)
+
 with ca:
     st.write("Prepared By:")
-    sig1 = st_canvas(stroke_width=2, height=150, width=300, key="sig1", background_color="#ffffff")
+    prepared_sig_upload = st.file_uploader(
+        "Upload Prepared By Signature",
+        type=["png", "jpg", "jpeg"],
+        key="prepared_sig_upload"
+    )
+    if prepared_sig_upload:
+        st.image(prepared_sig_upload, width=250)
+    st.caption("Atau sign guna ruangan bawah")
+    sig1 = st_canvas(
+        stroke_width=2,
+        height=150,
+        width=300,
+        key="sig1",
+        background_color="#ffffff"
+    )
 
 with cb:
     st.write("Verified By:")
-    sig2 = st_canvas(stroke_width=2, height=150, width=300, key="sig2", background_color="#ffffff")
+    verified_sig_upload = st.file_uploader(
+        "Upload Verified By Signature",
+        type=["png", "jpg", "jpeg"],
+        key="verified_sig_upload"
+    )
+    if verified_sig_upload:
+        st.image(verified_sig_upload, width=250)
+    st.caption("Atau sign guna ruangan bawah")
+    sig2 = st_canvas(
+        stroke_width=2,
+        height=150,
+        width=300,
+        key="sig2",
+        background_color="#ffffff"
+    )
+
 
 # =========================================================
 # 12. PDF GENERATION
 # =========================================================
 if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=True):
-    p_img = process_signature(sig1.image_data)
-    v_img = process_signature(sig2.image_data)
+    p_img = get_signature_image(prepared_sig_upload, sig1.image_data)
+    v_img = get_signature_image(verified_sig_upload, sig2.image_data)
 
     if p_img is None or v_img is None:
-        st.error("Sila turunkan tanda tangan terlebih dahulu!")
+        st.error("Sila upload signature image atau turunkan tanda tangan terlebih dahulu untuk kedua-dua ruangan!")
     else:
         pdf = VTMS_Full_Report(header_title=header_txt)
         logo_to_use = FIXED_LOGO_PATH if os.path.exists(FIXED_LOGO_PATH) else None
