@@ -17,177 +17,56 @@ TAMBAHAN_FILE = 'templates_tambahan.json'
 
 def load_templates():
     defaults = {
-        "RADAR INTERFACE SERVICE REPORT": {
-            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-            "widths": [10, 110, 15, 15, 40],
-            "type": "checkbox",
-            "content": [
-                ["1.0 TERMA SCANTER 5202 - General Inspection", [
-                    "Physical condition inspection",
-                    "Check equipment for physical damage",
-                    "Check connector condition",
-                    "Check cable condition",
-                    "Check error / alarm indication"
-                ]],
-                ["2.0 ACP - Azimuth Change Pulse", [
-                    "Check ACP output signal",
-                    "Verify waveform using oscilloscope",
-                    "Measure frequency",
-                    "Measure period",
-                    "Verify ACP pulse count / revolution",
-                    "Calculate antenna RPM",
-                    "Compare RPM with R5 RIC indication"
-                ]],
-                ["3.0 ARP - Azimuth Reference Pulse", [
-                    "Check ARP output signal",
-                    "Verify waveform using oscilloscope",
-                    "Verify 1 pulse / revolution",
-                    "Measure pulse period",
-                    "Verify signal consistency with ACP"
-                ]],
-                ["4.0 Analogue Video", [
-                    "Check Analogue Video output",
-                    "Verify video waveform using oscilloscope",
-                    "Measure output voltage",
-                    "Verify output frequency / waveform",
-                    "Verify output impedance / termination",
-                    "Confirm 50 ohm / 75 ohm configuration with OEM",
-                    "Verify signal suitable for R5 RIC input"
-                ]],
-                ["5.0 Trigger", [
-                    "Check Trigger output signal",
-                    "Verify waveform using oscilloscope",
-                    "Measure trigger voltage",
-                    "Measure trigger frequency",
-                    "Verify rising / falling edge",
-                    "Verify trigger level against OEM specification",
-                    "Verify termination / measurement arrangement"
-                ]],
-                ["6.0 Oscilloscope Measurement Setup", [
-                    "Verify oscilloscope probe setting",
-                    "Verify oscilloscope coupling setting",
-                    "Verify Volt/Div setting",
-                    "Verify Time/Div setting",
-                    "Verify trigger setting",
-                    "Verify measurement termination",
-                    "Record measured values"
-                ]],
-                ["7.0 Saab R5 RIC Interface Verification", [
-                    "Verify ACP input",
-                    "Verify ARP input",
-                    "Verify Video input",
-                    "Verify Trigger input",
-                    "Verify signal indication at R5 RIC",
-                    "Verify antenna RPM indication",
-                    "Verify pulse rate indication"
-                ]],
-                ["8.0 Integration / Data Verification", [
-                    "Verify radar data received at R5 RIC",
-                    "Verify azimuth data",
-                    "Verify video data",
-                    "Verify trigger synchronization",
-                    "Verify radar data output to Radar Extractor",
-                    "Perform end-to-end data verification"
-                ]],
-                ["9.0 Cable & Connector", [
-                    "Inspect BNC connector",
-                    "Inspect coaxial cable",
-                    "Verify cable impedance",
-                    "Verify cable continuity",
-                    "Check connector termination",
-                    "Check cable identification / labelling"
-                ]],
-                ["10.0 Final Verification", [
-                    "Review all measured values",
-                    "Record outstanding issues",
-                    "Confirm OEM clarification required",
-                    "Confirm equipment returned to normal configuration",
-                    "Housekeeping"
-                ]]
+        "SERVICE REPORT DOCUMENT": {
+    "type": "document",
+    "content": [
+        {
+            "heading": "1. TUJUAN",
+            "paragraphs": [
+                "Pemeriksaan dilaksanakan bagi mengesahkan kewujudan dan keadaan signal output radar TERMA SCANTER 5202 yang diperlukan untuk integrasi dengan Saab R5 RIC dan seterusnya FOX Radar Extractor.",
+                "Interface yang dikenal pasti bagi tujuan integrasi ialah:"
+            ],
+            "bullets": [
+                "Analogue Video",
+                "Trigger",
+                "ACP",
+                "ARP"
+            ],
+            "paragraphs_after": [
+                "Keperluan interface tersebut adalah selaras dengan perbincangan teknikal integrasi yang menetapkan Video, Trigger, ACP dan ARP sebagai signal input kepada Saab R5 RIC."
             ]
         },
-        "MET REPORT": {
-            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-            "widths": [10, 110, 15, 15, 40],
-            "type": "checkbox",
-            "content": [
-                ["1.0 Anderaa Smartguard Datalogger", ["No physical defect, no error/alarm", "Check SN :1182", "Sensor detection check", "Data Storage Capacity/Backup check"]],
-                ["2.0 AMEC Mando 303 Transponder", ["No physical defect, no error/alarm", "Transmit AIS msg8 check", "Check SN :B4K300007", "Verify data at VTS Control(Coastwatch)"]],
-                ["3.0 Vaisala PWD20 Visibility Sensor", ["No physical defect, no error/alarm", "Check SN :W4017603", "Monitor Data Output", "Inspect Cables", "Cleaning sensor"]],
-                ["4.0 Vaisala WXT536 Weather Sensor", ["No physical defect, no error/alarm", "Check SN : W4045971", "Monitor Data Output", "Inspect Cables", "Cleaning sensor"]],
-                ["5.0 Solar Panel 12V 100Watt", ["No physical defect", "Voltage Output check (Remaks voltage)", "Cleaning"]],
-                ["6.0 Phocos Solar Charger Controller", ["No physical defect, no error/alarm"]],
-                ["7.0 MSB 12V 100Ah AGM Battery", ["No physical defect", "Voltage Output check (Remarks voltage)"]],
-                ["8.0 VHF Antenna", ["No physical defect"]],
-                ["9.0 GPS Antenna", ["No physical defect"]],
-                ["10.0 Stainless Equipment Enclosure", ["No physical defect"]],
-                ["11.0 Housekeeping", ["Remove dust on cable terminals"]]
+
+        {
+            "heading": "2. KAEDAH PEMERIKSAAN",
+            "paragraphs": [
+                "Pemeriksaan dilaksanakan melalui pemeriksaan fizikal dan pengukuran signal menggunakan oscilloscope.",
+                "Kaedah pemeriksaan meliputi:"
+            ],
+            "numbered": [
+                "Pemeriksaan interface/connector.",
+                "Sambungan oscilloscope kepada output yang berkaitan.",
+                "Pemerhatian waveform.",
+                "Pengukuran parameter signal seperti voltage, frequency dan period.",
+                "Perbandingan bacaan dengan spesifikasi teknikal yang berkaitan."
             ]
         },
-        "OPERATOR WORKSTATION REPORT": {
-            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-            "widths": [10, 110, 15, 15, 40],
-            "type": "checkbox",
-            "content": [
-                ["1.0 HP Z2 TWR Workstation", ["No physical defect", "Check SN :", "Network test (Note IP in Remark)", "Check system/Windows update"]],
-                ["2.0 Monitor HP P34hc G4", ["No physical defect", "Monitor 1 Check SN :", "Monitor 2 Check SN :"]],
-                ["3.0 HP Wireless Keyboard & Mouse", ["No physical defect", "Function test"]],
-                ["4.0 Coastwatch Dongle", ["No physical defect", "Check ID(*localhost 127.0.0.1 1947) :"]],
-                ["5.0 UPS ENPLUSEVOIIX-2KTS", ["No physical defect", "Check SN :", "Check output 230 VAC", "Battery test / Backup time"]],
-                ["6.0 Operator Terminal CYS1702", ["No physical defect", "Check SN :", "Network test (Note IP in Remark)", "TX/RX Check (Radio test)", "Playback voice check", "Event log record"]],
-                ["7.0 Monitor LIYAMA PROLITE", ["No physical defect", "Check SN :"]],
-                ["8.0 Headset - PLATORA", ["No physical defect"]],
-                ["9.0 Microphone PTT CYS1102", ["No physical defect", "Check SN :"]],
-                ["10.0 Foot Pedal CYS1315", ["No physical defect", "Check SN :"]],
-                ["11.0 Handset PTT CYS1313", ["No physical defect", "Check SN :"]],
-                ["12.0 Bluetooth Headset AINA", ["No physical defect", "Check ID (Note in Remark)", "Check SN:"]],
-                ["13.0 Software Check", ["Coastwatch properly installed", "Software functioning", "Receiving AIS data", "Database/Playback search test", "Check 3D GeoVS (PTP 3D only)"]],
-                ["14.0 Housekeeping", ["Remove dust on cables/fans"]]
+
+        {
+            "heading": "3. HASIL PEMERIKSAAN",
+            "paragraphs": [
+                "Hasil pemeriksaan direkodkan berdasarkan signal dan interface yang telah diuji di lokasi."
             ]
         },
-        "WALL DISPLAY REPORT": {
-            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-            "widths": [10, 110, 15, 15, 40],
-            "type": "checkbox",
-            "content": [
-                ["Displays", [f"Wall Display-{i}" for i in range(1, 16)]],
-                ["Housekeeping", ["Remove dust on cables"]]
+
+        {
+            "heading": "4. KESIMPULAN",
+            "paragraphs": [
+                "Hasil pemeriksaan mendapati signal yang berkaitan telah dikenal pasti dan pengesahan lanjut akan dilaksanakan bagi interface yang memerlukan verification tambahan."
             ]
-        },
-        "VHF PTP FLOOR 8": {
-            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-            "widths": [10, 110, 15, 15, 40],
-            "type": "checkbox",
-            "content": [
-                ["Passive Components", ["Antenna Omnidirectional", "Lightning protector", "Coaxial cable", "Check VSWR (Note in remark)", "VHF splitter", "VHF Combiner"]],
-                ["VHF Basestation", ["VHF 1 Check SN : 0001", "VHF 2 Check SN : 0002", "VHF 3 Check SN : 0003", "VHF 4 Check SN : 0004", "VHF 5 Check SN : 0005", "VHF 6 Check SN : 0006"]],
-                ["Network ", ["Switch Cisco Catalyst", "NTP Time Server", "Check NTP Monitoring Web", "Lease line & SDWAN Equipment"]],
-                ["Housekeeping", ["Remove dust on terminals"]]
-            ]
-        },
-        "PTP SERVER REPORT": {
-            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-            "widths": [10, 110, 15, 15, 40],
-            "type": "checkbox",
-            "content": [
-                ["PTP PPB SERVER", ["App Server VTSA SN: SGH443KXBB", "Database Server SN: SGH443KXBN", "Sensor Server SN: SGH443KX9Z", "VHF Server 1 SN: 8CJX034", "VHF Server 2 SN: 2JNX034"]],
-                ["STORAGE & SWITCH", ["SAN Switch SN: CZC4329XHM/XHP", "SAN Storage MSA SN: ACV411W1WL", "KVM LCD8500 SN: 2C4426BADY"]],
-                ["SERVER TASKS", ["Equipment operate without alarm", "Check system health and hardware status (CPU, RAM, disk usage)", "Check application and system logs for errors", "Check Windows update", "Verify archived data make sure 3 month previous data available", " Restart services or applications if necessary"]],
-                ["CHECK SERVER PERFORMANCE", ["CPU usage (App Server VTSA)", "CPU usage (Database Server)", "CPU usage (Sensor Server)", "RAM usage (App Server VTSA)", "RAM usage (Database Server)", "RAM usage (Sensor Server)", "Windows update (App Server VTSA)", "Windows update (Database Server)", "Windows update (Sensor Server)"]],
-                ["HOUSEKEEPING", ["Remove dust on terminals"]]
-            ]
-        },
-        "LPJ SERVER REPORT": {
-            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
-            "widths": [10, 110, 15, 15, 40],
-            "type": "checkbox",
-            "content": [
-                ["LPJ SERVER", ["App/DB Server SN: SGH441G81Z"]],
-                ["STORAGE & SWITCH", ["SAN Switch SN: CZC4329XF8/XHT", "SAN Storage MSA SN: ACV411W1LS", "NTP Time Server and GPS Antenna check"]],
-                ["SERVER TASKS", ["Equipment operate without alarm", "Check system health and hardware status (CPU, RAM, disk usage)", "Check application and system logs for errors", "Check Windows update", "Verify archived data make sure 3 month previous data available", " Restart services or applications if necessary"]],
-                ["CHECK SERVER PERFORMANCE", ["CPU usage", "RAM usage", "Windows update"]],
-                ["HOUSEKEEPING", ["Remove dust on terminals"]]
-            ]
+        }
+    ]
+}
         },
         "INSTALLATION REPORT": {
             "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
