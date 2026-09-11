@@ -664,8 +664,19 @@ with cb:
 # 13. PDF GENERATION
 # =========================================================
 if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=True):
-    p_img = get_signature_image(prepared_sig_upload, sig1.image_data)
-    v_img = get_signature_image(verified_sig_upload, sig2.image_data)
+    # Elakkan RuntimeError jika canvas kosong / belum dilukis
+    try:
+        sig1_data = sig1.image_data
+    except Exception:
+        sig1_data = None
+
+    try:
+        sig2_data = sig2.image_data
+    except Exception:
+        sig2_data = None
+
+    p_img = get_signature_image(prepared_sig_upload, sig1_data)
+    v_img = get_signature_image(verified_sig_upload, sig2_data)
 
     if p_img is None or v_img is None:
         st.error("Sila upload signature image atau sign dalam canvas untuk kedua-dua ruangan.")
