@@ -674,17 +674,15 @@ if generate_btn:
         sig1_data = None
         sig2_data = None
 
-        if sig1 and hasattr(sig1, "image_data"):
-            try:
-                sig1_data = sig1.image_data
-            except Exception:
-                pass
+        try:
+            sig1_data = sig1.image_data
+        except Exception:
+            sig1_data = None
 
-        if sig2 and hasattr(sig2, "image_data"):
-            try:
-                sig2_data = sig2.image_data
-            except Exception:
-                pass
+        try:
+            sig2_data = sig2.image_data
+        except Exception:
+            sig2_data = None
 
         p_img = get_signature_image(prepared_sig_upload, sig1_data)
         v_img = get_signature_image(verified_sig_upload, sig2_data)
