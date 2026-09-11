@@ -123,6 +123,19 @@ sn_database = {
 # =========================================================
 # 3. PROSES IMEJ & PDF HELPER
 # =========================================================
+def clean_text(text):
+    """Membersihkan aksara bukan Latin-1 supaya FPDF tidak crash."""
+    if text is None:
+        return ""
+    s = str(text)
+    replacements = {
+        '’': "'", '‘': "'", '“': '"', '”': '"', '–': '-', '—': '-',
+        '…': '...', '•': '*', '\xa0': ' '
+    }
+    for k, v in replacements.items():
+        s = s.replace(k, v)
+    return s.encode('latin-1', 'replace').decode('latin-1')
+
 def process_image(img_input, target_size=(800, 600)):
     if img_input is None:
         return None
@@ -158,7 +171,7 @@ def process_signature(canvas_data):
         return None
 
 def pdf_split_lines(pdf_obj, width, text):
-    text = "" if text is None else str(text)
+    text = clean_text(text)
     try:
         lines = pdf_obj.multi_cell(width, 5, text, split_only=True)
         return lines if lines else [""]
@@ -180,10 +193,30 @@ def pdf_split_lines(pdf_obj, width, text):
             wrapped.append(current)
         return wrapped if wrapped else [""]
 
+def get_pdf_bytes(pdf_obj):
+    """Mendapatkan bytes daripada FPDF secara selamat bagi semua versi library."""
+    try:
+        out = pdf_obj.output(dest='S')
+        if isinstance(out, (bytes, bytearray)):
+            return bytes(out)
+        elif isinstance(out, str):
+            return out.encode('latin-1', 'replace')
+    except Exception:
+        pass
+    try:
+        out = pdf_obj.output()
+        if isinstance(out, (bytes, bytearray)):
+            return bytes(out)
+        elif isinstance(out, str):
+            return out.encode('latin-1', 'replace')
+    except Exception:
+        pass
+    return b""
+
 class VTMS_Full_Report(FPDF):
     def __init__(self, header_title=""):
         super().__init__()
-        self.header_title = header_title
+        self.header_title = clean_text(header_title)
         self.set_auto_page_break(auto=True, margin=15)
 
     def header(self):
@@ -207,24 +240,24 @@ class VTMS_Full_Report(FPDF):
         self.ln(65)
         self.cell(0, 5, "SYSTEM OWNER", 0, 1, 'C')
         self.set_font('Arial', 'B', 16)
-        self.multi_cell(0, 8, data['owner'].upper(), 0, 'C')
+        self.multi_cell(0, 8, clean_text(data['owner']).upper(), 0, 'C')
         self.ln(10)
         self.set_font('Arial', 'B', 10)
         self.cell(0, 5, "PROJECT REFERENCE NO:", 0, 1, 'C')
         self.set_font('Arial', '', 10)
-        self.multi_cell(0, 5, data['ref'], 0, 'C')
+        self.multi_cell(0, 5, clean_text(data['ref']), 0, 'C')
         self.ln(25)
         self.set_font('Arial', 'B', 18)
         self.cell(0, 10, "DOCUMENT TITLE:", 0, 1, 'C')
         self.set_font('Arial', 'B', 22)
-        self.multi_cell(0, 12, data['title'].upper(), 0, 'C')
+        self.multi_cell(0, 12, clean_text(data['title']).upper(), 0, 'C')
         self.ln(35)
         for k, v in [("LOCATION", data['loc']), ("DOCUMENT ID", data['id']), ("DATE", data['dt'])]:
             self.set_x(35)
             self.set_font('Arial', 'B', 11)
             self.cell(50, 12, k, 1, 0, 'L')
             self.set_font('Arial', '', 11)
-            self.cell(90, 12, v, 1, 1, 'L')
+            self.cell(90, 12, clean_text(v), 1, 1, 'L')
 
 # =========================================================
 # 4. INTERFACE STREAMLIT
@@ -344,15 +377,13 @@ if config.get("type") == "document":
     for sec_idx, sec_data in enumerate(config["content"]):
         heading = sec_data.get("heading", f"Section {sec_idx + 1}")
         with st.expander(heading, expanded=True):
-            e_heading = st.text_input(f"Section Heading", value=heading, key=f"doc_h_{sec_idx}")
+            e_heading = st.text_input("Section Heading", value=heading, key=f"doc_h_{sec_idx}")
 
-            # Paragraphs
             e_paras = []
             for p_idx, p_val in enumerate(sec_data.get("paragraphs", [])):
                 p_text = st.text_area(f"Paragraph {p_idx+1}", value=p_val, key=f"doc_p_{sec_idx}_{p_idx}", height=80)
                 e_paras.append(p_text)
 
-            # Bullets
             e_bullets = []
             if "bullets" in sec_data:
                 st.markdown("**Bullet Points**")
@@ -360,7 +391,6 @@ if config.get("type") == "document":
                     b_text = st.text_input(f"Bullet {b_idx+1}", value=b_val, key=f"doc_b_{sec_idx}_{b_idx}")
                     e_bullets.append(b_text)
 
-            # Numbered
             e_numbered = []
             if "numbered" in sec_data:
                 st.markdown("**Numbered Items**")
@@ -368,7 +398,6 @@ if config.get("type") == "document":
                     n_text = st.text_input(f"Item {n_idx+1}", value=n_val, key=f"doc_num_{sec_idx}_{n_idx}")
                     e_numbered.append(n_text)
 
-            # Paragraphs After
             e_paras_after = []
             if "paragraphs_after" in sec_data:
                 for pa_idx, pa_val in enumerate(sec_data.get("paragraphs_after", [])):
@@ -521,19 +550,19 @@ if st.session_state.get("trigger_pdf_generate", False):
 
                     if d_item.get("heading"):
                         pdf.set_font('Arial', 'B', 10)
-                        pdf.multi_cell(0, 6, d_item["heading"], 0, 'L')
+                        pdf.multi_cell(0, 6, clean_text(d_item["heading"]), 0, 'L')
                         pdf.ln(1)
 
                     pdf.set_font('Arial', '', 9)
                     for p in d_item.get("paragraphs", []):
                         if p.strip():
-                            pdf.multi_cell(0, 5, p, 0, 'L')
+                            pdf.multi_cell(0, 5, clean_text(p), 0, 'L')
                             pdf.ln(2)
 
                     for b in d_item.get("bullets", []):
                         if b.strip():
                             pdf.set_x(15)
-                            pdf.multi_cell(0, 5, f"-  {b}", 0, 'L')
+                            pdf.multi_cell(0, 5, f"-  {clean_text(b)}", 0, 'L')
 
                     if d_item.get("bullets"):
                         pdf.ln(2)
@@ -541,14 +570,14 @@ if st.session_state.get("trigger_pdf_generate", False):
                     for n_idx, num_str in enumerate(d_item.get("numbered", []), 1):
                         if num_str.strip():
                             pdf.set_x(15)
-                            pdf.multi_cell(0, 5, f"{n_idx}.  {num_str}", 0, 'L')
+                            pdf.multi_cell(0, 5, f"{n_idx}.  {clean_text(num_str)}", 0, 'L')
 
                     if d_item.get("numbered"):
                         pdf.ln(2)
 
                     for pa in d_item.get("paragraphs_after", []):
                         if pa.strip():
-                            pdf.multi_cell(0, 5, pa, 0, 'L')
+                            pdf.multi_cell(0, 5, clean_text(pa), 0, 'L')
                             pdf.ln(2)
 
                     pdf.ln(3)
@@ -558,7 +587,7 @@ if st.session_state.get("trigger_pdf_generate", False):
                 pdf.set_font('Arial', 'B', 8)
                 pdf.set_fill_color(230, 230, 230)
                 for i, h in enumerate(h_l):
-                    pdf.cell(w_l[i], 8, h, 1, 0, 'C', 1)
+                    pdf.cell(w_l[i], 8, clean_text(h), 1, 0, 'C', 1)
                 pdf.ln()
 
                 cnt = 1
@@ -566,11 +595,11 @@ if st.session_state.get("trigger_pdf_generate", False):
                     if row['res'] == "TITLE":
                         pdf.set_font('Arial', 'B', 8)
                         pdf.set_fill_color(245, 245, 245)
-                        pdf.cell(sum(w_l), 8, f" {row['task']}", 1, 1, 'L', 1)
+                        pdf.cell(sum(w_l), 8, f" {clean_text(row['task'])}", 1, 1, 'L', 1)
                         cnt = 1
                     else:
                         pdf.set_font('Arial', '', 7)
-                        txt_remark = str(row.get('com', ''))
+                        txt_remark = clean_text(row.get('com', ''))
 
                         lines = pdf_split_lines(pdf, w_l[4], txt_remark)
                         line_count = len(lines)
@@ -581,7 +610,7 @@ if st.session_state.get("trigger_pdf_generate", False):
                             pdf.set_font('Arial', 'B', 8)
                             pdf.set_fill_color(230, 230, 230)
                             for i, h in enumerate(h_l):
-                                pdf.cell(w_l[i], 8, h, 1, 0, 'C', 1)
+                                pdf.cell(w_l[i], 8, clean_text(h), 1, 0, 'C', 1)
                             pdf.ln()
                             pdf.set_font('Arial', '', 7)
 
@@ -589,12 +618,12 @@ if st.session_state.get("trigger_pdf_generate", False):
                         curr_y = pdf.get_y()
 
                         pdf.cell(w_l[0], row_h, str(cnt), 1, 0, 'C')
-                        pdf.cell(w_l[1], row_h, f" {row['task']}", 1, 0, 'L')
+                        pdf.cell(w_l[1], row_h, f" {clean_text(row['task'])}", 1, 0, 'L')
 
                         if config.get("type") == "technical":
-                            pdf.cell(w_l[2], row_h, str(row.get('spec', '-')), 1, 0, 'C')
-                            pdf.cell(w_l[3], row_h, str(row.get('actual', '-')), 1, 0, 'C')
-                            pdf.cell(w_l[4], row_h, str(row['res']), 1, 0, 'C')
+                            pdf.cell(w_l[2], row_h, clean_text(row.get('spec', '-')), 1, 0, 'C')
+                            pdf.cell(w_l[3], row_h, clean_text(row.get('actual', '-')), 1, 0, 'C')
+                            pdf.cell(w_l[4], row_h, clean_text(row['res']), 1, 0, 'C')
                         else:
                             pdf.cell(w_l[2], row_h, "X" if row['res'] == "PASS" else "", 1, 0, 'C')
                             pdf.cell(w_l[3], row_h, "X" if row['res'] == "FAIL" else "", 1, 0, 'C')
@@ -621,8 +650,8 @@ if st.session_state.get("trigger_pdf_generate", False):
 
             pdf.set_font('Arial', '', 8)
             for idx, item in enumerate(st.session_state['issue_list']):
-                txt_issue = str(item['issue'])
-                txt_remark = str(item['Remarks'])
+                txt_issue = clean_text(item['issue'])
+                txt_remark = clean_text(item['Remarks'])
 
                 lines_issue = pdf_split_lines(pdf, w_issue[1], txt_issue)
                 lines_remark = pdf_split_lines(pdf, w_issue[2], txt_remark)
@@ -664,13 +693,15 @@ if st.session_state.get("trigger_pdf_generate", False):
             stmt = "The undersigned hereby confirms that the works described in this report have been carried out in accordance with agreed scope."
             pdf.multi_cell(0, 6, stmt, 0, 'L')
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_p:
-                p_path = tmp_p.name
+            tmp_p = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            p_path = tmp_p.name
+            tmp_p.close()
             p_img.save(p_path)
             temp_files_to_delete.append(p_path)
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_v:
-                v_path = tmp_v.name
+            tmp_v = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            v_path = tmp_v.name
+            tmp_v.close()
             v_img.save(v_path)
             temp_files_to_delete.append(v_path)
 
@@ -684,9 +715,9 @@ if st.session_state.get("trigger_pdf_generate", False):
 
             pdf.set_font('Arial', 'B', 10)
             pdf.set_x(15)
-            pdf.cell(90, 8, f"PREPARED BY: {tech_name}", 0, 0, 'C')
+            pdf.cell(90, 8, f"PREPARED BY: {clean_text(tech_name)}", 0, 0, 'C')
             pdf.set_x(105)
-            pdf.cell(90, 8, f"VERIFIED BY: {client_name}", 0, 1, 'C')
+            pdf.cell(90, 8, f"VERIFIED BY: {clean_text(client_name)}", 0, 1, 'C')
             pdf.set_font('Arial', 'I', 8)
             pdf.set_x(15)
             pdf.cell(90, 5, f"MYT: {gen_timestamp}", 0, 0, 'C')
@@ -711,8 +742,9 @@ if st.session_state.get("trigger_pdf_generate", False):
 
                         processed_img = process_image(ev['file'])
                         if processed_img:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_ev:
-                                temp_ev_path = tmp_ev.name
+                            tmp_ev = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+                            temp_ev_path = tmp_ev.name
+                            tmp_ev.close()
                             processed_img.save(temp_ev_path, "JPEG")
                             temp_files_to_delete.append(temp_ev_path)
 
@@ -720,7 +752,7 @@ if st.session_state.get("trigger_pdf_generate", False):
                             pdf.image(temp_ev_path, x=x + 2, y=y + 2, w=145, h=90)
                             pdf.set_xy(x, y + 95)
                             pdf.set_font('Arial', 'B', 10)
-                            pdf.multi_cell(150, 6, ev['label'], 0, 'C')
+                            pdf.multi_cell(150, 6, clean_text(ev['label']), 0, 'C')
                 else:
                     for i, ev in enumerate(evidence_data):
                         if i > 0 and i % 4 == 0:
@@ -730,8 +762,9 @@ if st.session_state.get("trigger_pdf_generate", False):
 
                         processed_img = process_image(ev['file'])
                         if processed_img:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_ev:
-                                temp_ev_path = tmp_ev.name
+                            tmp_ev = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+                            temp_ev_path = tmp_ev.name
+                            tmp_ev.close()
                             processed_img.save(temp_ev_path, "JPEG")
                             temp_files_to_delete.append(temp_ev_path)
 
@@ -739,12 +772,10 @@ if st.session_state.get("trigger_pdf_generate", False):
                             pdf.image(temp_ev_path, x=x + 2, y=y + 2, w=76, h=60)
                             pdf.set_xy(x, y + 65)
                             pdf.set_font('Arial', '', 9)
-                            pdf.multi_cell(80, 5, ev['label'], 0, 'C')
+                            pdf.multi_cell(80, 5, clean_text(ev['label']), 0, 'C')
 
             # 7. Penyiapan Fail PDF Bytes
-            raw_output = pdf.output()
-            final_bytes = bytes(raw_output) if isinstance(raw_output, (bytes, bytearray)) else str(raw_output).encode('latin-1')
-
+            final_bytes = get_pdf_bytes(pdf)
             date_str = myt_now.strftime('%d%m%Y')
             clean_filename = selected_template.replace(" ", "_")
             full_file_name = f"{clean_filename}_{date_str}.pdf"
