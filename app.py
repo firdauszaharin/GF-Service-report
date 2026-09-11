@@ -677,7 +677,6 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
     p_img = get_signature_image(prepared_sig_upload, sig1_data)
     v_img = get_signature_image(verified_sig_upload, sig2_data)
 
-    # Benarkan jana PDF walaupun tandatangan kosong (buat gambar putih fallback)
     def get_fallback_signature(img_obj, size=(300, 100)):
         if img_obj is not None:
             return img_obj
