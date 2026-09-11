@@ -116,11 +116,14 @@ def process_image(img_input, target_size=(1000, 700)):
     if img_input is None:
         return None
     try:
-        img = Image.open(img_input).convert("RGBA")
+        img = Image.open(img_input)
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
         background = Image.new("RGB", target_size, (255, 255, 255))
         img.thumbnail(target_size, Image.Resampling.LANCZOS)
         offset = ((target_size[0] - img.size[0]) // 2, (target_size[1] - img.size[1]) // 2)
-        background.paste(img, offset, mask=img.getchannel("A"))
+        alpha = img.getchannel("A") if "A" in img.getbands() else None
+        background.paste(img, offset, mask=alpha)
         return background
     except Exception as e:
         st.error(f"Error processing image: {e}")
@@ -661,241 +664,250 @@ with cb:
     )
 
 # =========================================================
-# 13. PDF GENERATION
+# 13. PDF GENERATION & TRIGGER
 # =========================================================
-if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=True):
-    try:
-        sig1_data = sig1.image_data
-    except Exception:
-        sig1_data = None
+st.divider()
+generate_btn = st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=True)
 
-    try:
-        sig2_data = sig2.image_data
-    except Exception:
+if generate_btn:
+    with st.spinner("Jana Laporan PDF... Sila tunggu..."):
+        sig1_data = None
         sig2_data = None
 
-    p_img = get_signature_image(prepared_sig_upload, sig1_data)
-    v_img = get_signature_image(verified_sig_upload, sig2_data)
-
-    def get_fallback_signature(img_obj, size=(300, 100)):
-        if img_obj is not None:
-            return img_obj
-        return Image.new("RGB", size, (255, 255, 255))
-
-    p_img_final = get_fallback_signature(p_img)
-    v_img_final = get_fallback_signature(v_img)
-
-    pdf = ReportPDF(header_title=header_txt)
-    logo_to_use = FIXED_LOGO_PATH if os.path.exists(FIXED_LOGO_PATH) else None
-
-    pdf.cover_page({
-        "owner": sys_owner,
-        "ref": proj_ref,
-        "title": selected_template,
-        "loc": loc,
-        "id": doc_id,
-        "dt": report_dt
-    }, logo_path=logo_to_use)
-
-    temp_files_to_delete = []
-
-    try:
-        # =================================================
-        # MAINTENANCE PDF
-        # =================================================
-        if selected_template == "MAINTENANCE REPORT":
-            headers = ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"]
-            widths = [10, 110, 15, 15, 40]
-
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "1.0    MAINTENANCE DETAILS / CHECKLIST", 0, 1)
-
-            pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 6, f"Equipment / System Name : {equipment_name}", 0, 1)
-            pdf.cell(0, 6, f"Maintenance Type : {maintenance_type}", 0, 1)
-            pdf.ln(2)
-            pdf.set_font("Arial", "B", 10)
-            pdf.cell(0, 6, "Team Details :", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(0, 6, team_details_formatted)
-            pdf.ln(3)
-
-            h_l, w_l = headers, widths
-            pdf.set_font("Arial", "B", 8)
-            pdf.set_fill_color(230, 230, 230)
-
-            for i, h in enumerate(h_l):
-                pdf.cell(w_l[i], 8, h, 1, 0, "C", 1)
-            pdf.ln()
-
-            cnt = 1
-            for row in maintenance_results:
-                if row["res"] == "TITLE":
-                    pdf.set_font("Arial", "B", 8)
-                    pdf.set_fill_color(245, 245, 245)
-                    pdf.cell(sum(w_l), 8, f" {row['task']}", 1, 1, "L", 1)
-                    cnt = 1
-                else:
-                    pdf.set_font("Arial", "", 7)
-                    txt_remark = str(row.get("com", ""))
-                    lines = pdf_split_lines(pdf, w_l[4], txt_remark)
-                    line_count = len(lines)
-                    row_h = max(8, line_count * 5)
-
-                    if pdf.get_y() + row_h > 270:
-                        pdf.add_page()
-                        pdf.set_font("Arial", "B", 8)
-                        pdf.set_fill_color(230, 230, 230)
-                        for i, h in enumerate(h_l):
-                            pdf.cell(w_l[i], 8, h, 1, 0, "C", 1)
-                        pdf.ln()
-                        pdf.set_font("Arial", "", 7)
-
-                    curr_x = pdf.get_x()
-                    curr_y = pdf.get_y()
-
-                    pdf.cell(w_l[0], row_h, str(cnt), 1, 0, "C")
-                    pdf.cell(w_l[1], row_h, f" {row['task']}", 1, 0, "L")
-                    pdf.cell(w_l[2], row_h, "X" if row["res"] == "PASS" else "", 1, 0, "C")
-                    pdf.cell(w_l[3], row_h, "X" if row["res"] == "FAIL" else "", 1, 0, "C")
-
-                    remark_x = curr_x + w_l[0] + w_l[1] + w_l[2] + w_l[3]
-                    pdf.set_xy(remark_x, curr_y)
-                    pdf.cell(w_l[4], row_h, "", 1, 0)
-
-                    text_y = curr_y + max(0, (row_h - (line_count * 5)) / 2)
-                    pdf.set_xy(remark_x, text_y)
-                    pdf.multi_cell(w_l[4], 5, txt_remark, 0, "L")
-
-                    pdf.set_xy(curr_x, curr_y + row_h)
-                    cnt += 1
-
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "2.0    SUMMARY", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(0, 6, remarks)
-
-            draw_attachment_grid(
-                pdf,
-                evidence_data,
-                temp_files_to_delete,
-                section_title="3.0    ATTACHMENTS"
-            )
-
-        # =================================================
-        # INSTALLATION PDF
-        # =================================================
-        if selected_template == "INSTALLATION REPORT":
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "1.0    SITE INFORMATION", 0, 1)
-
-            pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 6, f"Customer Name : {customer_name}", 0, 1)
-            pdf.multi_cell(0, 6, f"Customer Address : {customer_address}")
-            pdf.cell(0, 6, f"Onsite Team / Lead : {onsite_team}", 0, 1)
-            pdf.cell(0, 6, f"Onsite Date : {report_dt}", 0, 1)
-            pdf.cell(0, 6, f"Start Time : {start_time}", 0, 1)
-            pdf.cell(0, 6, f"Completed Time : {end_time}", 0, 1)
-            pdf.cell(0, 6, f"Category : {category}", 0, 1)
-            pdf.cell(0, 6, f"Service : {service}", 0, 1)
-            pdf.multi_cell(0, 6, f"Problem / Scope : {problem}")
-            pdf.ln(2)
-            pdf.set_font("Arial", "B", 10)
-            pdf.cell(0, 6, "Team Details :", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(0, 6, team_details_formatted)
-
-            pdf.ln(3)
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "2.0    REMARKS", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(0, 6, remarks)
-
-            draw_attachment_grid(
-                pdf,
-                installation_results,
-                temp_files_to_delete,
-                section_title="3.0    INSTALLATION ATTACHMENTS"
-            )
-
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "4.0    PARTS USED", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(0, 6, parts_used if parts_used.strip() else "NIL")
-
-        # =================================================
-        # APPROVAL PAGE
-        # =================================================
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "APPROVAL & ACCEPTANCE", 0, 1)
-        pdf.ln(5)
-
-        pdf.set_font("Arial", "", 10)
-        stmt = "The undersigned hereby confirms that the works described in this report have been carried out in accordance with the agreed scope."
-        pdf.multi_cell(0, 6, stmt, 0, "L")
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_p:
-            p_img_final.save(tmp_p.name)
-            p_path = tmp_p.name
-            temp_files_to_delete.append(p_path)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_v:
-            v_img_final.save(tmp_v.name)
-            v_path = tmp_v.name
-            temp_files_to_delete.append(v_path)
-
-        y_sig = pdf.get_y() + 10
-        pdf.image(p_path, x=40, y=y_sig, w=40)
-        pdf.image(v_path, x=130, y=y_sig, w=40)
-
-        pdf.set_y(y_sig + 25)
-
-        myt_now = datetime.now(timezone.utc) + timedelta(hours=8)
-        gen_timestamp = myt_now.strftime("%d/%m/%Y %H:%M:%S")
-
-        pdf.set_font("Arial", "B", 10)
-        pdf.set_x(15)
-        pdf.cell(90, 8, f"PREPARED BY: {prepared_by_name}", 0, 0, "C")
-        pdf.set_x(105)
-        pdf.cell(90, 8, f"VERIFIED BY: {verified_by_name}", 0, 1, "C")
-
-        pdf.set_font("Arial", "I", 8)
-        pdf.set_x(15)
-        pdf.cell(90, 5, f"MYT: {gen_timestamp}", 0, 0, "C")
-        pdf.set_x(105)
-        pdf.cell(90, 5, f"MYT: {gen_timestamp}", 0, 1, "C")
-
-        # =================================================
-        # OUTPUT & PREVIEW STORAGE
-        # =================================================
-        raw_output = pdf.output()
-        if isinstance(raw_output, (bytes, bytearray)):
-            final_bytes = bytes(raw_output)
-        else:
-            final_bytes = str(raw_output).encode("latin-1")
-
-        date_str = myt_now.strftime("%d%m%Y")
-        clean_filename = selected_template.replace(" ", "_")
-        full_file_name = f"{clean_filename}_{date_str}.pdf"
-
-        b64 = base64.b64encode(final_bytes).decode("utf-8")
-
-        st.session_state["pdf_preview_bytes"] = final_bytes
-        st.session_state["pdf_preview_b64"] = b64
-        st.session_state["pdf_filename"] = full_file_name
-
-    finally:
-        for file_path in temp_files_to_delete:
+        if sig1 and hasattr(sig1, "image_data"):
             try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+                sig1_data = sig1.image_data
             except Exception:
                 pass
+
+        if sig2 and hasattr(sig2, "image_data"):
+            try:
+                sig2_data = sig2.image_data
+            except Exception:
+                pass
+
+        p_img = get_signature_image(prepared_sig_upload, sig1_data)
+        v_img = get_signature_image(verified_sig_upload, sig2_data)
+
+        def get_fallback_signature(img_obj, size=(300, 100)):
+            if img_obj is not None:
+                return img_obj
+            return Image.new("RGB", size, (255, 255, 255))
+
+        p_img_final = get_fallback_signature(p_img)
+        v_img_final = get_fallback_signature(v_img)
+
+        pdf = ReportPDF(header_title=header_txt)
+        logo_to_use = FIXED_LOGO_PATH if os.path.exists(FIXED_LOGO_PATH) else None
+
+        pdf.cover_page({
+            "owner": sys_owner,
+            "ref": proj_ref,
+            "title": selected_template,
+            "loc": loc,
+            "id": doc_id,
+            "dt": report_dt
+        }, logo_path=logo_to_use)
+
+        temp_files_to_delete = []
+
+        try:
+            # =================================================
+            # MAINTENANCE PDF
+            # =================================================
+            if selected_template == "MAINTENANCE REPORT":
+                headers = ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"]
+                widths = [10, 110, 15, 15, 40]
+
+                pdf.add_page()
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, "1.0    MAINTENANCE DETAILS / CHECKLIST", 0, 1)
+
+                pdf.set_font("Arial", "", 10)
+                pdf.cell(0, 6, f"Equipment / System Name : {equipment_name}", 0, 1)
+                pdf.cell(0, 6, f"Maintenance Type : {maintenance_type}", 0, 1)
+                pdf.ln(2)
+                pdf.set_font("Arial", "B", 10)
+                pdf.cell(0, 6, "Team Details :", 0, 1)
+                pdf.set_font("Arial", "", 10)
+                pdf.multi_cell(0, 6, team_details_formatted)
+                pdf.ln(3)
+
+                h_l, w_l = headers, widths
+                pdf.set_font("Arial", "B", 8)
+                pdf.set_fill_color(230, 230, 230)
+
+                for i, h in enumerate(h_l):
+                    pdf.cell(w_l[i], 8, h, 1, 0, "C", 1)
+                pdf.ln()
+
+                cnt = 1
+                for row in maintenance_results:
+                    if row["res"] == "TITLE":
+                        pdf.set_font("Arial", "B", 8)
+                        pdf.set_fill_color(245, 245, 245)
+                        pdf.cell(sum(w_l), 8, f" {row['task']}", 1, 1, "L", 1)
+                        cnt = 1
+                    else:
+                        pdf.set_font("Arial", "", 7)
+                        txt_remark = str(row.get("com", ""))
+                        lines = pdf_split_lines(pdf, w_l[4], txt_remark)
+                        line_count = len(lines)
+                        row_h = max(8, line_count * 5)
+
+                        if pdf.get_y() + row_h > 270:
+                            pdf.add_page()
+                            pdf.set_font("Arial", "B", 8)
+                            pdf.set_fill_color(230, 230, 230)
+                            for i, h in enumerate(h_l):
+                                pdf.cell(w_l[i], 8, h, 1, 0, "C", 1)
+                            pdf.ln()
+                            pdf.set_font("Arial", "", 7)
+
+                        curr_x = pdf.get_x()
+                        curr_y = pdf.get_y()
+
+                        pdf.cell(w_l[0], row_h, str(cnt), 1, 0, "C")
+                        pdf.cell(w_l[1], row_h, f" {row['task']}", 1, 0, "L")
+                        pdf.cell(w_l[2], row_h, "X" if row["res"] == "PASS" else "", 1, 0, "C")
+                        pdf.cell(w_l[3], row_h, "X" if row["res"] == "FAIL" else "", 1, 0, "C")
+
+                        remark_x = curr_x + w_l[0] + w_l[1] + w_l[2] + w_l[3]
+                        pdf.set_xy(remark_x, curr_y)
+                        pdf.cell(w_l[4], row_h, "", 1, 0)
+
+                        text_y = curr_y + max(0, (row_h - (line_count * 5)) / 2)
+                        pdf.set_xy(remark_x, text_y)
+                        pdf.multi_cell(w_l[4], 5, txt_remark, 0, "L")
+
+                        pdf.set_xy(curr_x, curr_y + row_h)
+                        cnt += 1
+
+                pdf.add_page()
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, "2.0    SUMMARY", 0, 1)
+                pdf.set_font("Arial", "", 10)
+                pdf.multi_cell(0, 6, remarks)
+
+                draw_attachment_grid(
+                    pdf,
+                    evidence_data,
+                    temp_files_to_delete,
+                    section_title="3.0    ATTACHMENTS"
+                )
+
+            # =================================================
+            # INSTALLATION PDF
+            # =================================================
+            if selected_template == "INSTALLATION REPORT":
+                pdf.add_page()
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, "1.0    SITE INFORMATION", 0, 1)
+
+                pdf.set_font("Arial", "", 10)
+                pdf.cell(0, 6, f"Customer Name : {customer_name}", 0, 1)
+                pdf.multi_cell(0, 6, f"Customer Address : {customer_address}")
+                pdf.cell(0, 6, f"Onsite Team / Lead : {onsite_team}", 0, 1)
+                pdf.cell(0, 6, f"Onsite Date : {report_dt}", 0, 1)
+                pdf.cell(0, 6, f"Start Time : {start_time}", 0, 1)
+                pdf.cell(0, 6, f"Completed Time : {end_time}", 0, 1)
+                pdf.cell(0, 6, f"Category : {category}", 0, 1)
+                pdf.cell(0, 6, f"Service : {service}", 0, 1)
+                pdf.multi_cell(0, 6, f"Problem / Scope : {problem}")
+                pdf.ln(2)
+                pdf.set_font("Arial", "B", 10)
+                pdf.cell(0, 6, "Team Details :", 0, 1)
+                pdf.set_font("Arial", "", 10)
+                pdf.multi_cell(0, 6, team_details_formatted)
+
+                pdf.ln(3)
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, "2.0    REMARKS", 0, 1)
+                pdf.set_font("Arial", "", 10)
+                pdf.multi_cell(0, 6, remarks)
+
+                draw_attachment_grid(
+                    pdf,
+                    installation_results,
+                    temp_files_to_delete,
+                    section_title="3.0    INSTALLATION ATTACHMENTS"
+                )
+
+                pdf.add_page()
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, "4.0    PARTS USED", 0, 1)
+                pdf.set_font("Arial", "", 10)
+                pdf.multi_cell(0, 6, parts_used if parts_used.strip() else "NIL")
+
+            # =================================================
+            # APPROVAL PAGE
+            # =================================================
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, "APPROVAL & ACCEPTANCE", 0, 1)
+            pdf.ln(5)
+
+            pdf.set_font("Arial", "", 10)
+            stmt = "The undersigned hereby confirms that the works described in this report have been carried out in accordance with the agreed scope."
+            pdf.multi_cell(0, 6, stmt, 0, "L")
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_p:
+                p_img_final.save(tmp_p.name)
+                p_path = tmp_p.name
+                temp_files_to_delete.append(p_path)
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_v:
+                v_img_final.save(tmp_v.name)
+                v_path = tmp_v.name
+                temp_files_to_delete.append(v_path)
+
+            y_sig = pdf.get_y() + 10
+            pdf.image(p_path, x=40, y=y_sig, w=40)
+            pdf.image(v_path, x=130, y=y_sig, w=40)
+
+            pdf.set_y(y_sig + 25)
+
+            myt_now = datetime.now(timezone.utc) + timedelta(hours=8)
+            gen_timestamp = myt_now.strftime("%d/%m/%Y %H:%M:%S")
+
+            pdf.set_font("Arial", "B", 10)
+            pdf.set_x(15)
+            pdf.cell(90, 8, f"PREPARED BY: {prepared_by_name}", 0, 0, "C")
+            pdf.set_x(105)
+            pdf.cell(90, 8, f"VERIFIED BY: {verified_by_name}", 0, 1, "C")
+
+            pdf.set_font("Arial", "I", 8)
+            pdf.set_x(15)
+            pdf.cell(90, 5, f"MYT: {gen_timestamp}", 0, 0, "C")
+            pdf.set_x(105)
+            pdf.cell(90, 5, f"MYT: {gen_timestamp}", 0, 1, "C")
+
+            # =================================================
+            # OUTPUT & PREVIEW STORAGE
+            # =================================================
+            raw_output = pdf.output()
+            if isinstance(raw_output, (bytes, bytearray)):
+                final_bytes = bytes(raw_output)
+            else:
+                final_bytes = str(raw_output).encode("latin-1")
+
+            date_str = myt_now.strftime("%d%m%Y")
+            clean_filename = selected_template.replace(" ", "_")
+            full_file_name = f"{clean_filename}_{date_str}.pdf"
+
+            b64 = base64.b64encode(final_bytes).decode("utf-8")
+
+            st.session_state["pdf_preview_bytes"] = final_bytes
+            st.session_state["pdf_preview_b64"] = b64
+            st.session_state["pdf_filename"] = full_file_name
+
+        finally:
+            for file_path in temp_files_to_delete:
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception:
+                    pass
 
 # =========================================================
 # 14. LIVE PREVIEW & DOWNLOAD SECTION
