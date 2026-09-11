@@ -116,6 +116,8 @@ def process_image(img_input, target_size=(1000, 700)):
     if img_input is None:
         return None
     try:
+        if hasattr(img_input, "seek"):
+            img_input.seek(0)
         img = Image.open(img_input)
         if img.mode != "RGBA":
             img = img.convert("RGBA")
@@ -161,6 +163,8 @@ def process_uploaded_signature(uploaded_file, target_size=(600, 200)):
     if uploaded_file is None:
         return None
     try:
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
         img = Image.open(uploaded_file).convert("RGBA")
         try:
             alpha = img.getchannel("A")
@@ -192,7 +196,7 @@ def pdf_split_lines(pdf_obj, width, text):
     try:
         lines = pdf_obj.multi_cell(width, 5, text, split_only=True)
         return lines if lines else [""]
-    except TypeError:
+    except Exception:
         if not text.strip():
             return [""]
         approx_chars = max(1, int(width * 1.8))
@@ -238,9 +242,9 @@ def draw_attachment_grid(pdf, items, temp_files_to_delete, section_title="ATTACH
         processed = process_image(img_file, target_size=(900, 650))
         if processed:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                processed.save(tmp.name, "JPEG")
                 tmp_path = tmp.name
-                temp_files_to_delete.append(tmp_path)
+            processed.save(tmp_path, "JPEG")
+            temp_files_to_delete.append(tmp_path)
 
             pdf.rect(x, y, 80, 95)
             pdf.image(tmp_path, x=x + 2, y=y + 2, w=76, h=52)
@@ -273,7 +277,7 @@ class ReportPDF(FPDF):
     def __init__(self, header_title=""):
         super().__init__()
         self.header_title = header_title
-        self.set_auto_page_break(auto=False)
+        self.set_auto_page_break(auto=True, margin=15)
 
     def header(self):
         if self.page_no() > 1:
@@ -671,45 +675,44 @@ generate_btn = st.button("🚀 GENERATE FINAL REPORT", type="primary", use_conta
 
 if generate_btn:
     with st.spinner("Jana Laporan PDF... Sila tunggu..."):
-        sig1_data = None
-        sig2_data = None
-
+        temp_files_to_delete = []
         try:
-            sig1_data = sig1.image_data
-        except Exception:
             sig1_data = None
-
-        try:
-            sig2_data = sig2.image_data
-        except Exception:
             sig2_data = None
 
-        p_img = get_signature_image(prepared_sig_upload, sig1_data)
-        v_img = get_signature_image(verified_sig_upload, sig2_data)
+            try:
+                sig1_data = sig1.image_data if sig1 is not None else None
+            except Exception:
+                sig1_data = None
 
-        def get_fallback_signature(img_obj, size=(300, 100)):
-            if img_obj is not None:
-                return img_obj
-            return Image.new("RGB", size, (255, 255, 255))
+            try:
+                sig2_data = sig2.image_data if sig2 is not None else None
+            except Exception:
+                sig2_data = None
 
-        p_img_final = get_fallback_signature(p_img)
-        v_img_final = get_fallback_signature(v_img)
+            p_img = get_signature_image(prepared_sig_upload, sig1_data)
+            v_img = get_signature_image(verified_sig_upload, sig2_data)
 
-        pdf = ReportPDF(header_title=header_txt)
-        logo_to_use = FIXED_LOGO_PATH if os.path.exists(FIXED_LOGO_PATH) else None
+            def get_fallback_signature(img_obj, size=(300, 100)):
+                if img_obj is not None:
+                    return img_obj
+                return Image.new("RGB", size, (255, 255, 255))
 
-        pdf.cover_page({
-            "owner": sys_owner,
-            "ref": proj_ref,
-            "title": selected_template,
-            "loc": loc,
-            "id": doc_id,
-            "dt": report_dt
-        }, logo_path=logo_to_use)
+            p_img_final = get_fallback_signature(p_img)
+            v_img_final = get_fallback_signature(v_img)
 
-        temp_files_to_delete = []
+            pdf = ReportPDF(header_title=header_txt)
+            logo_to_use = FIXED_LOGO_PATH if os.path.exists(FIXED_LOGO_PATH) else None
 
-        try:
+            pdf.cover_page({
+                "owner": sys_owner,
+                "ref": proj_ref,
+                "title": selected_template,
+                "loc": loc,
+                "id": doc_id,
+                "dt": report_dt
+            }, logo_path=logo_to_use)
+
             # =================================================
             # MAINTENANCE PDF
             # =================================================
@@ -850,14 +853,14 @@ if generate_btn:
             pdf.multi_cell(0, 6, stmt, 0, "L")
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_p:
-                p_img_final.save(tmp_p.name)
                 p_path = tmp_p.name
-                temp_files_to_delete.append(p_path)
+            p_img_final.save(p_path)
+            temp_files_to_delete.append(p_path)
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_v:
-                v_img_final.save(tmp_v.name)
                 v_path = tmp_v.name
-                temp_files_to_delete.append(v_path)
+            v_img_final.save(v_path)
+            temp_files_to_delete.append(v_path)
 
             y_sig = pdf.get_y() + 10
             pdf.image(p_path, x=40, y=y_sig, w=40)
@@ -898,6 +901,10 @@ if generate_btn:
             st.session_state["pdf_preview_bytes"] = final_bytes
             st.session_state["pdf_preview_b64"] = b64
             st.session_state["pdf_filename"] = full_file_name
+
+        except Exception as pdf_err:
+            st.error(f"❌ Gagal menjana PDF: {pdf_err}")
+            st.exception(pdf_err)
 
         finally:
             for file_path in temp_files_to_delete:
