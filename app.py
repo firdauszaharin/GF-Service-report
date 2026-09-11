@@ -15,7 +15,107 @@ TAMBAHAN_FILE = 'templates_tambahan.json' # Fail simpanan untuk perubahan (Add/D
 
 def load_templates():
     defaults = {
-       "MET REPORT": {
+        "RADAR INTERFACE SERVICE REPORT": {
+            "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
+            "widths": [10, 110, 15, 15, 40],
+            "type": "checkbox",
+
+            "content": [
+
+                ["1.0 TERMA SCANTER 5202 - General Inspection", [
+                    "Physical condition inspection",
+                    "Check equipment for physical damage",
+                    "Check connector condition",
+                    "Check cable condition",
+                    "Check error / alarm indication"
+                ]],
+
+                ["2.0 ACP - Azimuth Change Pulse", [
+                    "Check ACP output signal",
+                    "Verify waveform using oscilloscope",
+                    "Measure frequency",
+                    "Measure period",
+                    "Verify ACP pulse count / revolution",
+                    "Calculate antenna RPM",
+                    "Compare RPM with R5 RIC indication"
+                ]],
+
+                ["3.0 ARP - Azimuth Reference Pulse", [
+                    "Check ARP output signal",
+                    "Verify waveform using oscilloscope",
+                    "Verify 1 pulse / revolution",
+                    "Measure pulse period",
+                    "Verify signal consistency with ACP"
+                ]],
+
+                ["4.0 Analogue Video", [
+                    "Check Analogue Video output",
+                    "Verify video waveform using oscilloscope",
+                    "Measure output voltage",
+                    "Verify output frequency / waveform",
+                    "Verify output impedance / termination",
+                    "Confirm 50 ohm / 75 ohm configuration with OEM",
+                    "Verify signal suitable for R5 RIC input"
+                ]],
+
+                ["5.0 Trigger", [
+                    "Check Trigger output signal",
+                    "Verify waveform using oscilloscope",
+                    "Measure trigger voltage",
+                    "Measure trigger frequency",
+                    "Verify rising / falling edge",
+                    "Verify trigger level against OEM specification",
+                    "Verify termination / measurement arrangement"
+                ]],
+
+                ["6.0 Oscilloscope Measurement Setup", [
+                    "Verify oscilloscope probe setting",
+                    "Verify oscilloscope coupling setting",
+                    "Verify Volt/Div setting",
+                    "Verify Time/Div setting",
+                    "Verify trigger setting",
+                    "Verify measurement termination",
+                    "Record measured values"
+                ]],
+
+                ["7.0 Saab R5 RIC Interface Verification", [
+                    "Verify ACP input",
+                    "Verify ARP input",
+                    "Verify Video input",
+                    "Verify Trigger input",
+                    "Verify signal indication at R5 RIC",
+                    "Verify antenna RPM indication",
+                    "Verify pulse rate indication"
+                ]],
+
+                ["8.0 Integration / Data Verification", [
+                    "Verify radar data received at R5 RIC",
+                    "Verify azimuth data",
+                    "Verify video data",
+                    "Verify trigger synchronization",
+                    "Verify radar data output to Radar Extractor",
+                    "Perform end-to-end data verification"
+                ]],
+
+                ["9.0 Cable & Connector", [
+                    "Inspect BNC connector",
+                    "Inspect coaxial cable",
+                    "Verify cable impedance",
+                    "Verify cable continuity",
+                    "Check connector termination",
+                    "Check cable identification / labelling"
+                ]],
+
+                ["10.0 Final Verification", [
+                    "Review all measured values",
+                    "Record outstanding issues",
+                    "Confirm OEM clarification required",
+                    "Confirm equipment returned to normal configuration",
+                    "Housekeeping"
+                ]]
+            ]
+        },
+        "MET REPORT": {
             "headers": ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"],
             "widths": [10, 110, 15, 15, 40],
             "type": "checkbox",
