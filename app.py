@@ -668,12 +668,22 @@ with cb:
     )
 
 # =========================================================
-# 13. PDF GENERATION & TRIGGER
+# 13. PDF GENERATION & TRIGGER (DENGAN CALLBACK)
 # =========================================================
 st.divider()
-generate_btn = st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=True)
 
-if generate_btn:
+def trigger_pdf_generation():
+    st.session_state["do_generate_pdf"] = True
+
+st.button(
+    "🚀 GENERATE FINAL REPORT",
+    type="primary",
+    use_container_width=True,
+    on_click=trigger_pdf_generation
+)
+
+if st.session_state.get("do_generate_pdf", False):
+    st.session_state["do_generate_pdf"] = False
     with st.spinner("Jana Laporan PDF... Sila tunggu..."):
         temp_files_to_delete = []
         try:
@@ -901,6 +911,7 @@ if generate_btn:
             st.session_state["pdf_preview_bytes"] = final_bytes
             st.session_state["pdf_preview_b64"] = b64
             st.session_state["pdf_filename"] = full_file_name
+            st.success("✅ Laporan berjaya dijana!")
 
         except Exception as pdf_err:
             st.error(f"❌ Gagal menjana PDF: {pdf_err}")
