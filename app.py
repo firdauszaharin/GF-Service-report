@@ -131,6 +131,8 @@ def process_signature(canvas_image_data):
     if canvas_image_data is None:
         return None
     try:
+        if not hasattr(canvas_image_data, "shape"):
+            return None
         arr = canvas_image_data.astype("uint8")
         if len(arr.shape) != 3 or arr.shape[2] != 4:
             return None
@@ -373,16 +375,20 @@ problem = ""
 st.divider()
 st.subheader("👥 Team Details")
 
-for idx in range(len(st.session_state["team_members"])):
+to_delete_idx = None
+for idx, member in enumerate(st.session_state["team_members"]):
     col1, col2 = st.columns([5, 1])
     st.session_state["team_members"][idx] = col1.text_input(
         f"Team Member {idx + 1}",
-        value=st.session_state["team_members"][idx],
+        value=member,
         key=f"team_member_{idx}"
     )
     if col2.button("❌", key=f"delete_team_member_{idx}"):
-        st.session_state["team_members"].pop(idx)
-        st.rerun()
+        to_delete_idx = idx
+
+if to_delete_idx is not None:
+    st.session_state["team_members"].pop(to_delete_idx)
+    st.rerun()
 
 add_tm1, add_tm2 = st.columns([4, 1])
 new_team_member = add_tm1.text_input("New Team Member", key="new_team_member")
@@ -463,6 +469,7 @@ if selected_template == "MAINTENANCE REPORT":
 
     st.divider()
 
+    sec_to_del = None
     for sec_idx, sec in enumerate(st.session_state["maintenance_sections"]):
         with st.expander(f"Section {sec_idx+1}", expanded=True):
             title_col1, title_col2 = st.columns([4, 1])
@@ -474,11 +481,11 @@ if selected_template == "MAINTENANCE REPORT":
             )
 
             if title_col2.button("🗑️ Delete Section", key=f"del_sec_{sec_idx}"):
-                st.session_state["maintenance_sections"].pop(sec_idx)
-                st.rerun()
+                sec_to_del = sec_idx
 
             st.markdown("**Tasks**")
 
+            task_to_del = None
             for task_idx, task in enumerate(sec["tasks"]):
                 tcol1, tcol2 = st.columns([5, 1])
                 sec["tasks"][task_idx] = tcol1.text_input(
@@ -487,8 +494,11 @@ if selected_template == "MAINTENANCE REPORT":
                     key=f"task_{sec_idx}_{task_idx}"
                 )
                 if tcol2.button("❌", key=f"del_task_{sec_idx}_{task_idx}"):
-                    st.session_state["maintenance_sections"][sec_idx]["tasks"].pop(task_idx)
-                    st.rerun()
+                    task_to_del = task_idx
+
+            if task_to_del is not None:
+                st.session_state["maintenance_sections"][sec_idx]["tasks"].pop(task_to_del)
+                st.rerun()
 
             add_task_col1, add_task_col2 = st.columns([4, 1])
             new_task = add_task_col1.text_input("New Task", key=f"new_task_{sec_idx}")
@@ -497,11 +507,12 @@ if selected_template == "MAINTENANCE REPORT":
                     st.session_state["maintenance_sections"][sec_idx]["tasks"].append(new_task.strip())
                     st.rerun()
 
+    if sec_to_del is not None:
+        st.session_state["maintenance_sections"].pop(sec_to_del)
+        st.rerun()
+
     st.divider()
     st.subheader("Maintenance Checklist")
-
-    headers = ["NO", "ITEM / ACTIVITY", "PASS", "FAIL", "REMARK"]
-    widths = [10, 110, 15, 15, 40]
 
     for sec_idx, sec in enumerate(st.session_state["maintenance_sections"]):
         maintenance_results.append({"task": sec["title"], "res": "TITLE", "com": ""})
@@ -845,39 +856,23 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
             pdf.cell(90, 5, f"MYT: {gen_timestamp}", 0, 1, "C")
 
             # =================================================
-            # OUTPUT
+            # OUTPUT & PREVIEW STORAGE
             # =================================================
-            pdf_output = pdf.output(dest="S")
-            final_bytes = pdf_output.encode("latin-1") if isinstance(pdf_output, str) else bytes(pdf_output)
+            raw_output = pdf.output()
+            if isinstance(raw_output, (bytes, bytearray)):
+                final_bytes = bytes(raw_output)
+            else:
+                final_bytes = str(raw_output).encode("latin-1")
 
             date_str = myt_now.strftime("%d%m%Y")
             clean_filename = selected_template.replace(" ", "_")
             full_file_name = f"{clean_filename}_{date_str}.pdf"
 
-            st.divider()
             b64 = base64.b64encode(final_bytes).decode("utf-8")
 
-            new_tab_js = f"""
-                <script>
-                    function openPDF() {{
-                        var pdfData = "data:application/pdf;base64,{b64}";
-                        var win = window.open();
-                        win.document.write('<iframe src="' + pdfData + '" frameborder="0" style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;" allowfullscreen></iframe>');
-                    }}
-                </script>
-                <button onclick="openPDF()" style="width:100%; background-color:#2e7bcf; color:white; padding:12px; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">
-                    👁️ PREVIEW REPORT IN NEW TAB
-                </button>
-            """
-            st.components.v1.html(new_tab_js, height=60)
-
-            st.download_button(
-                label=f"📥 DOWNLOAD {full_file_name}",
-                data=final_bytes,
-                file_name=full_file_name,
-                mime="application/pdf",
-                use_container_width=True
-            )
+            st.session_state["pdf_preview_bytes"] = final_bytes
+            st.session_state["pdf_preview_b64"] = b64
+            st.session_state["pdf_filename"] = full_file_name
 
         finally:
             for file_path in temp_files_to_delete:
@@ -886,3 +881,48 @@ if st.button("🚀 GENERATE FINAL REPORT", type="primary", use_container_width=T
                         os.remove(file_path)
                 except Exception:
                     pass
+
+# =========================================================
+# 14. LIVE PREVIEW & DOWNLOAD SECTION
+# =========================================================
+if "pdf_preview_b64" in st.session_state and st.session_state["pdf_preview_b64"]:
+    st.divider()
+    st.markdown("## 👁️ REPORT PREVIEW & DOWNLOAD")
+
+    col_btn1, col_btn2 = st.columns(2)
+
+    with col_btn1:
+        st.download_button(
+            label=f"📥 DOWNLOAD {st.session_state['pdf_filename']}",
+            data=st.session_state["pdf_preview_bytes"],
+            file_name=st.session_state["pdf_filename"],
+            mime="application/pdf",
+            use_container_width=True,
+            type="primary"
+        )
+
+    with col_btn2:
+        new_tab_js = f"""
+            <script>
+                function openPDF() {{
+                    var pdfData = "data:application/pdf;base64,{st.session_state['pdf_preview_b64']}";
+                    var win = window.open();
+                    win.document.write('<iframe src="' + pdfData + '" frameborder="0" style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;" allowfullscreen></iframe>');
+                }}
+            </script>
+            <button onclick="openPDF()" style="width:100%; background-color:#2e7bcf; color:white; padding:10px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; height:42px;">
+                🔗 Buka Dalam Tab Baharu
+            </button>
+        """
+        st.components.v1.html(new_tab_js, height=50)
+
+    pdf_display = f'''
+        <iframe 
+            src="data:application/pdf;base64,{st.session_state['pdf_preview_b64']}" 
+            width="100%" 
+            height="800px" 
+            type="application/pdf"
+            style="border: 2px solid #ccc; border-radius: 8px;">
+        </iframe>
+    '''
+    st.components.v1.html(pdf_display, height=820)
